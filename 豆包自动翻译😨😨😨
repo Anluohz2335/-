@@ -63,6 +63,11 @@ local function isEnglish(text)
     if not text or text == "" then
         return false
     end
+        -- 过滤聊天框富文本标签，避免乱码
+    if text:find("<") or text:find(">") or text:find("font") then
+        return false
+    end
+
     local englishCount = 0
     local totalCount = 0
     for char in text:gmatch(".") do
