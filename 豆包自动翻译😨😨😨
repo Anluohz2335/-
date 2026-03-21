@@ -1,16 +1,3 @@
----关注b站UID:1531514159
----一群1035184654
----二群2168053189（聊天群）
----十九群1064447273（五百人群）
----二十一群178021813（五百人群）
----二十二群336225224（五百人群）
----二十三群218012845（五百人群）
----二十四群1035646571（五百人群）
----二十五群1071017763（五百人群）
----二十六群820782679（五百人群）
----二十七群1067211151（五百人群）
----Kenny脚本群1019547871（五百人群）
----sp源码分享协会727992470
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -21,7 +8,7 @@ local LocalPlayer = Players.LocalPlayer
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/JsYb666/UI/refs/heads/main/Wind%20lib.txt"))()
 
 local Window = WindUI:CreateWindow({
-    Folder = "TX-HUB",
+    Folder = "AN-HUB",
     SideBarWidth = 0.5,
     Title = "极坝自动翻译",
     Transparent = true,
@@ -224,7 +211,7 @@ local Tab = Window:Tab({
 })
 
 Tab:Section({
-    Title = "注意:请先加载此脚本开启翻译 再加载你需要翻译的脚本👍🏻👍🏻👍🏻",
+    Title = "请先加载此脚本开启翻译再加载你需要翻译的脚本🤔",
 })
 
 Tab:Section({
@@ -232,7 +219,7 @@ Tab:Section({
 })
 
 Tab:Toggle({
-    Title = "开启老爷自动翻译👁👁👀👀🤓🤓🤓",
+    Title = "开启老爷自动翻译",
     Default = false,
     Callback = function(value)
         translationEnabled = value
