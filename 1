@@ -1,4 +1,4 @@
--- Dex++ 完整版 · 可放大缩小 · 日志控制台 + 防踢
+-- 自定义控制台 · 可缩放 · 全中文 · 防踢 · 日志正常
 local Players = game:GetService("Players")
 local LogService = game:GetService("LogService")
 local UserInputService = game:GetService("UserInputService")
@@ -9,11 +9,11 @@ local KickAttempts = 0
 local oldKick, ancestryConn
 local ConsoleVisible = true
 local autoScroll = true
-local filterMode = "All"
+local filterMode = "全部"
 
 -- GUI
 local sg = Instance.new("ScreenGui")
-sg.Name = "DexConsole"
+sg.Name = "CustomConsole"
 sg.ResetOnSpawn = false
 sg.Parent = lp.PlayerGui
 
@@ -25,7 +25,7 @@ frame.BorderSizePixel = 0
 frame.ClipsDescendants = true
 frame.Parent = sg
 
--- Top Bar
+-- 顶部栏
 local topBar = Instance.new("Frame")
 topBar.Size = UDim2.new(1, 0, 0, 26)
 topBar.BackgroundColor3 = Color3.new(0.12, 0.12, 0.18)
@@ -35,7 +35,7 @@ local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, -160, 1, 0)
 title.Position = UDim2.new(0, 6, 0, 0)
 title.BackgroundTransparency = 1
-title.Text = "DEX++ CONSOLE"
+title.Text = "自定义控制台"
 title.TextColor3 = Color3.new(0.7, 0.9, 1)
 title.Font = Enum.Font.Code
 title.TextSize = 14
@@ -46,13 +46,13 @@ local btnHide = Instance.new("TextButton")
 btnHide.Size = UDim2.new(0, 60, 0, 22)
 btnHide.Position = UDim2.new(1, -66, 0, 2)
 btnHide.BackgroundColor3 = Color3.new(0.18, 0.2, 0.28)
-btnHide.Text = "HIDE"
+btnHide.Text = "隐藏"
 btnHide.TextColor3 = Color3.new(0.9,0.9,0.9)
 btnHide.Font = Enum.Font.Code
 btnHide.TextSize = 12
 btnHide.Parent = topBar
 
--- Log Area
+-- 日志区域
 local logArea = Instance.new("ScrollingFrame")
 logArea.Size = UDim2.new(1, -4, 1, -90)
 logArea.Position = UDim2.new(0, 2, 0, 28)
@@ -69,12 +69,14 @@ list.Padding = UDim.new(0, 1)
 
 list:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
     logArea.CanvasSize = UDim2.new(0, 0, list.AbsoluteContentSize.Y + 4, 0)
-    if autoScroll then
-        logArea.CanvasPosition = Vector2.new(0, logArea.AbsoluteCanvasSize.Y)
-    end
+    task.delay(0.05, function()
+        if autoScroll then
+            logArea.CanvasPosition = Vector2.new(0, logArea.AbsoluteCanvasSize.Y)
+        end
+    end)
 end)
 
--- Button Bar
+-- 按钮栏
 local btnBar = Instance.new("Frame")
 btnBar.Size = UDim2.new(1, 0, 0, 32)
 btnBar.Position = UDim2.new(0, 0, 1, -56)
@@ -85,7 +87,7 @@ local btnClear = Instance.new("TextButton")
 btnClear.Size = UDim2.new(0.32, -2, 0, 28)
 btnClear.Position = UDim2.new(0.01, 0, 0, 2)
 btnClear.BackgroundColor3 = Color3.new(0.18, 0.14, 0.22)
-btnClear.Text = "CLEAR"
+btnClear.Text = "清空"
 btnClear.TextColor3 = Color3.new(1,1,1)
 btnClear.Font = Enum.Font.Code
 btnClear.TextSize = 11
@@ -95,7 +97,7 @@ local btnFilter = Instance.new("TextButton")
 btnFilter.Size = UDim2.new(0.32, -2, 0, 28)
 btnFilter.Position = UDim2.new(0.34, 0, 0, 2)
 btnFilter.BackgroundColor3 = Color3.new(0.14, 0.18, 0.24)
-btnFilter.Text = "FILTER: ALL"
+btnFilter.Text = "过滤: 全部"
 btnFilter.TextColor3 = Color3.new(1,1,1)
 btnFilter.Font = Enum.Font.Code
 btnFilter.TextSize = 11
@@ -105,13 +107,13 @@ local btnAuto = Instance.new("TextButton")
 btnAuto.Size = UDim2.new(0.32, -2, 0, 28)
 btnAuto.Position = UDim2.new(0.67, 0, 0, 2)
 btnAuto.BackgroundColor3 = Color3.new(0.16, 0.22, 0.20)
-btnAuto.Text = "AUTO: ON"
+btnAuto.Text = "自动: 开启"
 btnAuto.TextColor3 = Color3.new(1,1,1)
 btnAuto.Font = Enum.Font.Code
 btnAuto.TextSize = 11
 btnAuto.Parent = btnBar
 
--- Bottom Bar
+-- 底部栏
 local bottomBar = Instance.new("Frame")
 bottomBar.Size = UDim2.new(1, 0, 0, 24)
 bottomBar.Position = UDim2.new(0, 0, 1, -24)
@@ -121,7 +123,7 @@ bottomBar.Parent = frame
 local akStatus = Instance.new("TextLabel")
 akStatus.Size = UDim2.new(0.5, -2, 1, 0)
 akStatus.BackgroundTransparency = 1
-akStatus.Text = "ANTIKICK: OFF"
+akStatus.Text = "防踢: 关闭"
 akStatus.TextColor3 = Color3.new(0.9, 0.3, 0.3)
 akStatus.Font = Enum.Font.Code
 akStatus.TextSize = 12
@@ -131,13 +133,13 @@ local btnAK = Instance.new("TextButton")
 btnAK.Size = UDim2.new(0.5, -2, 0, 20)
 btnAK.Position = UDim2.new(0.5, 1, 0, 2)
 btnAK.BackgroundColor3 = Color3.new(0.18, 0.25, 0.35)
-btnAK.Text = "ENABLE"
+btnAK.Text = "开启防踢"
 btnAK.TextColor3 = Color3.new(0.95,0.95,0.95)
 btnAK.Font = Enum.Font.Code
 btnAK.TextSize = 12
 btnAK.Parent = bottomBar
 
--- 缩放手柄（右下角可拖动放大缩小）
+-- 缩放手柄
 local resizeHandle = Instance.new("TextButton")
 resizeHandle.Size = UDim2.new(0, 24, 0, 24)
 resizeHandle.Position = UDim2.new(1, -24, 1, -24)
@@ -149,12 +151,12 @@ resizeHandle.Font = Enum.Font.Code
 resizeHandle.TextSize = 14
 resizeHandle.Parent = frame
 
--- 悬浮打开按钮
+-- 悬浮打开
 local floatOpen = Instance.new("TextButton")
 floatOpen.Size = UDim2.new(0, 80, 0, 32)
 floatOpen.Position = UDim2.new(0.02, 0, 0.85, 0)
 floatOpen.BackgroundColor3 = Color3.new(0.15, 0.3, 0.5)
-floatOpen.Text = "OPEN"
+floatOpen.Text = "打开控制台"
 floatOpen.TextColor3 = Color3.new(1,1,1)
 floatOpen.Font = Enum.Font.Code
 floatOpen.TextSize = 12
@@ -183,7 +185,7 @@ UserInputService.InputEnded:Connect(function(input)
     end
 end)
 
--- 缩放功能（拖动右下角 ↘）
+-- 缩放
 local resizing = false
 local startSize, startMousePos
 resizeHandle.InputBegan:Connect(function(input)
@@ -210,15 +212,15 @@ end)
 -- 日志输出
 local function addLog(msg, typ, color)
     local show = true
-    if filterMode == "Error" and typ ~= "error" then show = false end
-    if filterMode == "Warn" and typ ~= "warn" then show = false end
-    if filterMode == "Print" and typ ~= "print" then show = false end
+    if filterMode == "错误" and typ ~= "错误" then show = false end
+    if filterMode == "警告" and typ ~= "警告" then show = false end
+    if filterMode == "打印" and typ ~= "打印" then show = false end
     if not show then return end
 
     local label = Instance.new("TextLabel")
     label.Size = UDim2.new(1, 0, 0, 16)
     label.BackgroundTransparency = 1
-    label.Text = string.format("[%s] %s: %s", os.date("%H:%M:%S"), typ:upper(), msg)
+    label.Text = string.format("[%s] %s: %s", os.date("%H:%M:%S"), typ, msg)
     label.TextColor3 = color
     label.Font = Enum.Font.Code
     label.TextSize = 11
@@ -231,19 +233,22 @@ btnClear.MouseButton1Click:Connect(function()
     for _,v in pairs(logArea:GetChildren()) do
         if v:IsA("TextLabel") then v:Destroy() end
     end
-    addLog("Console cleared", "info", Color3.new(0.3,1,0.7))
+    addLog("控制台已清空", "信息", Color3.new(0.3,1,0.7))
 end)
 
 btnFilter.MouseButton1Click:Connect(function()
-    local modes = {"All","Error","Warn","Print"}
+    local modes = {"全部","错误","警告","打印"}
     local curr = table.find(modes, filterMode) or 1
     filterMode = modes[curr % #modes + 1]
-    btnFilter.Text = "FILTER: "..filterMode
+    btnFilter.Text = "过滤: "..filterMode
 end)
 
 btnAuto.MouseButton1Click:Connect(function()
     autoScroll = not autoScroll
-    btnAuto.Text = autoScroll and "AUTO: ON" or "AUTO: OFF"
+    btnAuto.Text = autoScroll and "自动: 开启" or "自动: 关闭"
+    if autoScroll then
+        logArea.CanvasPosition = Vector2.new(0, logArea.AbsoluteCanvasSize.Y)
+    end
 end)
 
 btnHide.MouseButton1Click:Connect(function()
@@ -258,13 +263,13 @@ end)
 -- 日志监听
 LogService.MessageOut:Connect(function(msg, msgType)
     if msgType == Enum.MessageType.MessageOutput then
-        addLog(msg, "print", Color3.new(0.9,0.9,0.9))
+        addLog(msg, "打印", Color3.new(0.9,0.9,0.9))
     elseif msgType == Enum.MessageType.MessageInfo then
-        addLog(msg, "info", Color3.new(0.2,0.8,1))
+        addLog(msg, "信息", Color3.new(0.2,0.8,1))
     elseif msgType == Enum.MessageType.MessageWarning then
-        addLog(msg, "warn", Color3.new(1,0.8,0.2))
+        addLog(msg, "警告", Color3.new(1,0.8,0.2))
     elseif msgType == Enum.MessageType.MessageError then
-        addLog(msg, "error", Color3.new(1,0.3,0.3))
+        addLog(msg, "错误", Color3.new(1,0.3,0.3))
     end
 end)
 
@@ -275,16 +280,16 @@ local function enableAK()
         oldKick = lp.Kick
         lp.Kick = function(...)
             KickAttempts += 1
-            addLog("Blocked kick", "antikick", Color3.new(1,0.5,0.1))
+            addLog("已拦截踢出 (次数: "..KickAttempts..")", "防踢", Color3.new(1,0.5,0.1))
             return task.wait(9e9)
         end
     end)
     ancestryConn = lp.AncestryChanged:Connect(function(_, p)
         if p ~= Players then lp.Parent = Players end
     end)
-    akStatus.Text = "ANTIKICK: ON | "..KickAttempts
+    akStatus.Text = "防踢: 开启 | 次数: "..KickAttempts
     akStatus.TextColor3 = Color3.new(0.2,1,0.4)
-    btnAK.Text = "DISABLE"
+    btnAK.Text = "关闭防踢"
     btnAK.BackgroundColor3 = Color3.new(0.35,0.15,0.15)
 end
 
@@ -292,9 +297,9 @@ local function disableAK()
     AntiKickActive = false
     pcall(function() if oldKick then lp.Kick = oldKick end end)
     if ancestryConn then ancestryConn:Disconnect() end
-    akStatus.Text = "ANTIKICK: OFF | "..KickAttempts
+    akStatus.Text = "防踢: 关闭 | 次数: "..KickAttempts
     akStatus.TextColor3 = Color3.new(0.9,0.3,0.3)
-    btnAK.Text = "ENABLE"
+    btnAK.Text = "开启防踢"
     btnAK.BackgroundColor3 = Color3.new(0.18,0.25,0.35)
 end
 
@@ -302,4 +307,4 @@ btnAK.MouseButton1Click:Connect(function()
     if AntiKickActive then disableAK() else enableAK() end
 end)
 
-addLog("Dex++ Console loaded", "info", Color3.new(0.3,1,0.7))
+addLog("控制台已加载", "信息", Color3.new(0.3,1,0.7))
