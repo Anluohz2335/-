@@ -1,0 +1,42 @@
+-- 完全无 __namecall 防踢 | 针对 namecall detector 优化
+local Players = game:GetService("Players")
+local TeleportService = game:GetService("TeleportService")
+local lp = Players.LocalPlayer
+
+-- 核心：直接 Hook 玩家的 Kick 方法，不碰 __namecall
+local oldKick
+oldKick = lp.Kick
+lp.Kick = function(self, ...)
+    -- 直接把 Kick 函数替换成空操作，服务器调用就直接无效
+    return task.wait(9e9)
+end
+
+-- 角色被移除时自动复活
+lp.CharacterRemoving:Connect(function()
+    task.wait(0.3)
+    if lp.Parent then
+        lp:LoadCharacter()
+    end
+end)
+
+-- 传送防踢，防止被强制跳转
+lp.OnTeleport:Connect(function(state)
+    if state == Enum.TeleportState.Started then
+        task.wait(0.3)
+        TeleportService:Teleport(game.PlaceId, lp)
+    end
+end)
+
+-- 防止服务器用 Destroy 踢人
+lp.AncestryChanged:Connect(function(_, parent)
+    if parent ~= Players then
+        lp.Parent = Players
+    end
+end)
+
+-- 提示（只弹一次）
+game.StarterGui:SetCore("SendNotification", {
+    Title = "Anti-Kick Loaded",
+    Text = "No Namecall Hook Used",
+    Duration = 3
+})
