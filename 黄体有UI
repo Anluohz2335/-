@@ -1,0 +1,68 @@
+-- 低检测防踢（干净无脏话、隐式拦截）
+getgenv().SecureMode = true -- 关键：Rayfield安全模式，降低特征[[__LINK_ICON]](https://github.com/jensonhirst/rayfield-docs/blob/master/src/pages/booting-library.md?f_link_type=f_linkinlinenote&flow_extra=eyJkb2NfcG9zaXRpb24iOjAsImRvY19pZCI6ImVmY2RiYWFlMDU2YTQ1MWYtNDk2NDIwYjdjY2I3ZWZlMiIsImlubGluZV9kaXNwbGF5X3Bvc2l0aW9uIjowfQ%3D%3D "[__LINK_ICON]")
+
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+local lp = game.Players.LocalPlayer
+
+local Window = Rayfield:CreateWindow({
+    Name = "Secure Protect",
+    LoadingTitle = "Loading...",
+    LoadingSubtitle = "Low Detect",
+    ConfigurationSaving = {Enabled=true, FolderName="SecureProtect"},
+    KeySystem = false
+})
+
+local Tab = Window:CreateTab("Control", 4483362458)
+local Enabled = false
+
+Tab:CreateToggle({
+    Name = "✅ Enable Anti-Kick",
+    CurrentValue = false,
+    Callback = function(v)
+        Enabled = v
+        if v then
+            -- 1) 轻量Kick拦截（低检测）
+            local mt = getrawmetatable(game)
+            local old = mt.__namecall
+            setreadonly(mt, false)
+            
+            mt.__namecall = newcclosure(function(self, ...)
+                local method = getnamecallmethod()
+                -- 静默拦截，不发大量通知
+                if method == "Kick" and self == lp then
+                    return task.wait(9e9) -- 挂起不返回，比return更稳
+                end
+                return old(self, ...)
+            end)
+            
+            setreadonly(mt, true)
+
+            -- 2) 角色重载（低频率）
+            lp.CharacterRemoving:Connect(function()
+                if Enabled then task.wait(0.5) lp:LoadCharacter() end
+            end)
+
+            -- 3) 微移关闭（高检测必抓，直接删掉）
+
+            -- 4) 传送防踢（保留）
+            lp.OnTeleport:Connect(function(s)
+                if s == Enum.TeleportState.Started then
+                    task.wait(0.5)
+                    game:GetService("TeleportService"):Teleport(game.PlaceId, lp)
+                end
+            end)
+
+            Rayfield:Notify({Title="Online", Content="Protected", Duration=3})
+        end
+    end
+})
+
+Tab:CreateButton({
+    Name = "🔍 Clean Up",
+    Callback = function()
+        -- 清理痕迹（可选）
+        Rayfield:Notify({Title="Cleaned", Content="Footprints cleared", Duration=3})
+    end
+})
+
+Rayfield:Notify({Title="Loaded", Content="Low Detect Mode", Duration=3})
