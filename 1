@@ -1,4 +1,4 @@
--- 自定义控制台 · 可缩放 · 全中文 · 防踢 · 日志正常
+-- 自定义控制台 · 完全复刻Dex滚动 · 初始无空行 · 不会乱跳
 local Players = game:GetService("Players")
 local LogService = game:GetService("LogService")
 local UserInputService = game:GetService("UserInputService")
@@ -7,11 +7,9 @@ local lp = Players.LocalPlayer
 local AntiKickActive = false
 local KickAttempts = 0
 local oldKick, ancestryConn
-local ConsoleVisible = true
-local autoScroll = true
+local autoScroll = false
 local filterMode = "全部"
 
--- GUI
 local sg = Instance.new("ScreenGui")
 sg.Name = "CustomConsole"
 sg.ResetOnSpawn = false
@@ -25,7 +23,6 @@ frame.BorderSizePixel = 0
 frame.ClipsDescendants = true
 frame.Parent = sg
 
--- 顶部栏
 local topBar = Instance.new("Frame")
 topBar.Size = UDim2.new(1, 0, 0, 26)
 topBar.BackgroundColor3 = Color3.new(0.12, 0.12, 0.18)
@@ -52,7 +49,9 @@ btnHide.Font = Enum.Font.Code
 btnHide.TextSize = 12
 btnHide.Parent = topBar
 
--- 日志区域
+-- ======================
+-- 核心：日志区域（Dex同款）
+-- ======================
 local logArea = Instance.new("ScrollingFrame")
 logArea.Size = UDim2.new(1, -4, 1, -90)
 logArea.Position = UDim2.new(0, 2, 0, 28)
@@ -60,6 +59,7 @@ logArea.BackgroundTransparency = 1
 logArea.ScrollBarThickness = 4
 logArea.BorderSizePixel = 0
 logArea.ScrollingDirection = Enum.ScrollingDirection.Y
+logArea.CanvasSize = UDim2.new(0, 0, 0, 0) -- 初始0高度，关键！
 logArea.Parent = frame
 
 local list = Instance.new("UIListLayout")
@@ -67,16 +67,16 @@ list.Parent = logArea
 list.SortOrder = Enum.SortOrder.LayoutOrder
 list.Padding = UDim.new(0, 1)
 
+local logCount = 0
+
+-- 只有日志变化时才更新高度
 list:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-    logArea.CanvasSize = UDim2.new(0, 0, list.AbsoluteContentSize.Y + 4, 0)
-    task.delay(0.05, function()
-        if autoScroll then
-            logArea.CanvasPosition = Vector2.new(0, logArea.AbsoluteCanvasSize.Y)
-        end
-    end)
+    logArea.CanvasSize = UDim2.new(0, 0, list.AbsoluteContentSize.Y, 0)
 end)
 
+-- ======================
 -- 按钮栏
+-- ======================
 local btnBar = Instance.new("Frame")
 btnBar.Size = UDim2.new(1, 0, 0, 32)
 btnBar.Position = UDim2.new(0, 0, 1, -56)
@@ -107,13 +107,15 @@ local btnAuto = Instance.new("TextButton")
 btnAuto.Size = UDim2.new(0.32, -2, 0, 28)
 btnAuto.Position = UDim2.new(0.67, 0, 0, 2)
 btnAuto.BackgroundColor3 = Color3.new(0.16, 0.22, 0.20)
-btnAuto.Text = "自动: 开启"
+btnAuto.Text = "自动: 关闭"
 btnAuto.TextColor3 = Color3.new(1,1,1)
 btnAuto.Font = Enum.Font.Code
 btnAuto.TextSize = 11
 btnAuto.Parent = btnBar
 
+-- ======================
 -- 底部栏
+-- ======================
 local bottomBar = Instance.new("Frame")
 bottomBar.Size = UDim2.new(1, 0, 0, 24)
 bottomBar.Position = UDim2.new(0, 0, 1, -24)
@@ -209,13 +211,17 @@ UserInputService.InputEnded:Connect(function(input)
     end
 end)
 
--- 日志输出
+-- ======================
+-- 日志输出（Dex同款逻辑）
+-- ======================
 local function addLog(msg, typ, color)
     local show = true
     if filterMode == "错误" and typ ~= "错误" then show = false end
     if filterMode == "警告" and typ ~= "警告" then show = false end
     if filterMode == "打印" and typ ~= "打印" then show = false end
     if not show then return end
+
+    logCount += 1
 
     local label = Instance.new("TextLabel")
     label.Size = UDim2.new(1, 0, 0, 16)
@@ -226,16 +232,25 @@ local function addLog(msg, typ, color)
     label.TextSize = 11
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.Parent = logArea
+
+    -- 只有开了自动 且 是最新一条 才滚动
+    if autoScroll then
+        task.defer(function()
+            logArea.CanvasPosition = Vector2.new(0, logArea.AbsoluteCanvasSize.Y)
+        end)
+    end
 end
 
--- 按钮功能
+-- 清空
 btnClear.MouseButton1Click:Connect(function()
     for _,v in pairs(logArea:GetChildren()) do
         if v:IsA("TextLabel") then v:Destroy() end
     end
-    addLog("控制台已清空", "信息", Color3.new(0.3,1,0.7))
+    logCount = 0
+    logArea.CanvasSize = UDim2.new(0,0,0,0)
 end)
 
+-- 过滤
 btnFilter.MouseButton1Click:Connect(function()
     local modes = {"全部","错误","警告","打印"}
     local curr = table.find(modes, filterMode) or 1
@@ -243,14 +258,16 @@ btnFilter.MouseButton1Click:Connect(function()
     btnFilter.Text = "过滤: "..filterMode
 end)
 
+-- 自动滚动
 btnAuto.MouseButton1Click:Connect(function()
     autoScroll = not autoScroll
     btnAuto.Text = autoScroll and "自动: 开启" or "自动: 关闭"
-    if autoScroll then
+    if autoScroll and logCount > 0 then
         logArea.CanvasPosition = Vector2.new(0, logArea.AbsoluteCanvasSize.Y)
     end
 end)
 
+-- 隐藏/显示
 btnHide.MouseButton1Click:Connect(function()
     frame.Visible = false
     floatOpen.Visible = true
@@ -260,7 +277,7 @@ floatOpen.MouseButton1Click:Connect(function()
     floatOpen.Visible = false
 end)
 
--- 日志监听
+-- 监听print
 LogService.MessageOut:Connect(function(msg, msgType)
     if msgType == Enum.MessageType.MessageOutput then
         addLog(msg, "打印", Color3.new(0.9,0.9,0.9))
@@ -280,14 +297,14 @@ local function enableAK()
         oldKick = lp.Kick
         lp.Kick = function(...)
             KickAttempts += 1
-            addLog("已拦截踢出 (次数: "..KickAttempts..")", "防踢", Color3.new(1,0.5,0.1))
+            addLog("已拦截踢出 ("..KickAttempts..")", "防踢", Color3.new(1,0.5,0.1))
             return task.wait(9e9)
         end
     end)
     ancestryConn = lp.AncestryChanged:Connect(function(_, p)
         if p ~= Players then lp.Parent = Players end
     end)
-    akStatus.Text = "防踢: 开启 | 次数: "..KickAttempts
+    akStatus.Text = "防踢: 开启 | "..KickAttempts
     akStatus.TextColor3 = Color3.new(0.2,1,0.4)
     btnAK.Text = "关闭防踢"
     btnAK.BackgroundColor3 = Color3.new(0.35,0.15,0.15)
@@ -297,7 +314,7 @@ local function disableAK()
     AntiKickActive = false
     pcall(function() if oldKick then lp.Kick = oldKick end end)
     if ancestryConn then ancestryConn:Disconnect() end
-    akStatus.Text = "防踢: 关闭 | 次数: "..KickAttempts
+    akStatus.Text = "防踢: 关闭 | "..KickAttempts
     akStatus.TextColor3 = Color3.new(0.9,0.3,0.3)
     btnAK.Text = "开启防踢"
     btnAK.BackgroundColor3 = Color3.new(0.18,0.25,0.35)
@@ -306,5 +323,3 @@ end
 btnAK.MouseButton1Click:Connect(function()
     if AntiKickActive then disableAK() else enableAK() end
 end)
-
-addLog("控制台已加载", "信息", Color3.new(0.3,1,0.7))
