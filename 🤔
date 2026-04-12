@@ -1,179 +1,115 @@
--- 原生GUI防踢 · 无Namecall低检测版
+-- 低检测防踢 | Rayfield 纯净版（无namecall）
+getgenv().SecureMode = true -- 关键：降低 Rayfield 特征
+
+local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
 local TeleportService = game:GetService("TeleportService")
-local StarterGui = game:GetService("StarterGui")
 local lp = Players.LocalPlayer
 
--- 全局开关
-local AntiKickEnabled = false
+-- 恢复变量，方便开关
 local KickHooked = false
-local CharacterConnection
-local AncestryConnection
-local TeleportConnection
+local oldKick
+local charConn, ancestryConn, teleportConn
 
--- 1. 创建原生UI（不会被检测）
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "AntiKickUI"
-ScreenGui.ResetOnSpawn = false
-ScreenGui.Parent = lp.PlayerGui
+-- 创建窗口
+local Window = Rayfield:CreateWindow({
+    Name = "Secure Anti-Kick",
+    LoadingTitle = "Initializing",
+    LoadingSubtitle = "Low-Detect Mode",
+    ConfigurationSaving = {
+        Enabled = true,
+        FolderName = "SecureAntiKick"
+    },
+    KeySystem = false
+})
 
--- 主窗口
-local MainFrame = Instance.new("Frame")
-MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 220, 0, 150)
-MainFrame.Position = UDim2.new(0.05, 0, 0.05, 0)
-MainFrame.BackgroundColor3 = Color3.new(0.1, 0.1, 0.15)
-MainFrame.BorderColor3 = Color3.new(0.3, 0.6, 1)
-MainFrame.BorderSizePixel = 2
-MainFrame.Parent = ScreenGui
+local MainTab = Window:CreateTab("Control", 4483362458)
 
--- 标题
-local Title = Instance.new("TextLabel")
-Title.Name = "Title"
-Title.Size = UDim2.new(1, 0, 0, 30)
-Title.Position = UDim2.new(0, 0, 0, 0)
-Title.BackgroundTransparency = 1
-Title.Text = "低检测防踢"
-Title.TextColor3 = Color3.new(1, 1, 1)
-Title.Font = Enum.Font.SourceSansBold
-Title.TextSize = 18
-Title.Parent = MainFrame
+-- 防踢开关
+MainTab:CreateToggle({
+    Name = "🛡️ 开启防踢防护",
+    CurrentValue = false,
+    Callback = function(Value)
+        if Value then
+            -- 替换Kick函数（不用namecall）
+            oldKick = lp.Kick
+            lp.Kick = function(self, ...)
+                return task.wait(9e9)
+            end
+            KickHooked = true
 
--- 开关按钮
-local ToggleButton = Instance.new("TextButton")
-ToggleButton.Name = "ToggleButton"
-ToggleButton.Size = UDim2.new(0.8, 0, 0, 40)
-ToggleButton.Position = UDim2.new(0.1, 0, 0, 40)
-ToggleButton.BackgroundColor3 = Color3.new(0.2, 0.4, 0.6)
-ToggleButton.BorderColor3 = Color3.new(0.3, 0.6, 1)
-ToggleButton.BorderSizePixel = 1
-ToggleButton.Text = "点击开启"
-ToggleButton.TextColor3 = Color3.new(1, 1, 1)
-ToggleButton.Font = Enum.Font.SourceSans
-ToggleButton.TextSize = 16
-ToggleButton.Parent = MainFrame
+            -- 角色重载保护
+            charConn = lp.CharacterRemoving:Connect(function()
+                task.wait(0.3)
+                if lp.Parent then lp:LoadCharacter() end
+            end)
 
--- 状态显示
-local StatusLabel = Instance.new("TextLabel")
-StatusLabel.Name = "StatusLabel"
-StatusLabel.Size = UDim2.new(1, 0, 0, 30)
-StatusLabel.Position = UDim2.new(0, 0, 0, 90)
-StatusLabel.BackgroundTransparency = 1
-StatusLabel.Text = "状态: 已关闭"
-StatusLabel.TextColor3 = Color3.new(0.7, 0.7, 0.7)
-StatusLabel.Font = Enum.Font.SourceSans
-StatusLabel.TextSize = 14
-StatusLabel.Parent = MainFrame
+            -- 父级移除保护
+            ancestryConn = lp.AncestryChanged:Connect(function(_, parent)
+                if parent ~= Players then lp.Parent = Players end
+            end)
 
--- 防踢核心逻辑
-local function EnableAntiKick()
-    if KickHooked then return end
-    KickHooked = true
+            -- 传送保护
+            teleportConn = lp.OnTeleport:Connect(function(state)
+                if state == Enum.TeleportState.Started then
+                    task.wait(0.3)
+                    TeleportService:Teleport(game.PlaceId, lp)
+                end
+            end)
 
-    -- 替换Kick函数（不碰namecall）
-    local oldKick
-    oldKick = lp.Kick
-    lp.Kick = function(self, ...)
-        return task.wait(9e9)
-    end
+            Rayfield:Notify({
+                Title = "Protected",
+                Content = "Anti-Kick activated (no namecall)",
+                Duration = 3
+            })
+        else
+            -- 恢复Kick函数
+            if oldKick then
+                lp.Kick = oldKick
+            end
+            KickHooked = false
 
-    -- 角色重载保护
-    CharacterConnection = lp.CharacterRemoving:Connect(function()
-        task.wait(0.3)
-        if lp.Parent then lp:LoadCharacter() end
-    end)
+            -- 断开所有连接
+            if charConn then charConn:Disconnect() end
+            if ancestryConn then ancestryConn:Disconnect() end
+            if teleportConn then teleportConn:Disconnect() end
 
-    -- 父级移除保护
-    AncestryConnection = lp.AncestryChanged:Connect(function(_, parent)
-        if parent ~= Players then lp.Parent = Players end
-    end)
-
-    -- 传送保护
-    TeleportConnection = lp.OnTeleport:Connect(function(state)
-        if state == Enum.TeleportState.Started then
-            task.wait(0.3)
-            TeleportService:Teleport(game.PlaceId, lp)
+            Rayfield:Notify({
+                Title = "Disabled",
+                Content = "Anti-Kick turned off",
+                Duration = 3
+            })
         end
-    end)
-
-    -- 更新UI
-    ToggleButton.Text = "点击关闭"
-    ToggleButton.BackgroundColor3 = Color3.new(0.2, 0.6, 0.4)
-    StatusLabel.Text = "状态: 已开启 ✅"
-    StatusLabel.TextColor3 = Color3.new(0.3, 1, 0.5)
-
-    StarterGui:SetCore("SendNotification", {
-        Title = "防踢已开启",
-        Text = "低检测模式运行中",
-        Duration = 3
-    })
-end
-
-local function DisableAntiKick()
-    if not KickHooked then return end
-    KickHooked = false
-
-    -- 恢复原始Kick函数
-    lp.Kick = oldKick
-
-    -- 断开所有连接
-    if CharacterConnection then CharacterConnection:Disconnect() end
-    if AncestryConnection then AncestryConnection:Disconnect() end
-    if TeleportConnection then TeleportConnection:Disconnect() end
-
-    -- 更新UI
-    ToggleButton.Text = "点击开启"
-    ToggleButton.BackgroundColor3 = Color3.new(0.2, 0.4, 0.6)
-    StatusLabel.Text = "状态: 已关闭 ❌"
-    StatusLabel.TextColor3 = Color3.new(1, 0.5, 0.5)
-
-    StarterGui:SetCore("SendNotification", {
-        Title = "防踢已关闭",
-        Text = "恢复正常状态",
-        Duration = 3
-    })
-end
-
--- 按钮点击事件
-ToggleButton.MouseButton1Click:Connect(function()
-    AntiKickEnabled = not AntiKickEnabled
-    if AntiKickEnabled then
-        EnableAntiKick()
-    else
-        DisableAntiKick()
     end
-end)
+})
 
--- 窗口拖拽功能（可选，方便移动）
-local dragging = false
-local dragStart
-local startPos
+-- 一键清理（可选）
+MainTab:CreateButton({
+    Name = "🧹 一键重置状态",
+    Callback = function()
+        -- 强制恢复所有保护
+        if oldKick then lp.Kick = oldKick end
+        KickHooked = false
+        if charConn then charConn:Disconnect() end
+        if ancestryConn then ancestryConn:Disconnect() end
+        if teleportConn then teleportConn:Disconnect() end
 
-MainFrame.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging = true
-        dragStart = input.Position
-        startPos = MainFrame.Position
+        Rayfield:Notify({
+            Title = "Reset",
+            Content = "All protections reset",
+            Duration = 3
+        })
     end
-end)
+})
 
-MainFrame.InputChanged:Connect(function(input)
-    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-        local delta = input.Position - dragStart
-        MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-    end
-end)
+MainTab:CreateLabel("Features:")
+MainTab:CreateLabel("• Direct Kick Override (no namecall)")
+MainTab:CreateLabel("• Character Reload Protection")
+MainTab:CreateLabel("• Ancestry Protection")
+MainTab:CreateLabel("• Teleport Protection")
 
-MainFrame.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging = false
-    end
-end)
-
--- 加载完成提示
-StarterGui:SetCore("SendNotification", {
-    Title = "UI加载完成",
-    Text = "低检测防踢就绪",
+Rayfield:Notify({
+    Title = "Loaded",
+    Content = "Secure Anti-Kick ready",
     Duration = 3
 })
