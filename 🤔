@@ -1,42 +1,179 @@
--- 完全无 __namecall 防踢 | 针对 namecall detector 优化
+-- 原生GUI防踢 · 无Namecall低检测版
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 local TeleportService = game:GetService("TeleportService")
+local StarterGui = game:GetService("StarterGui")
 local lp = Players.LocalPlayer
 
--- 核心：直接 Hook 玩家的 Kick 方法，不碰 __namecall
-local oldKick
-oldKick = lp.Kick
-lp.Kick = function(self, ...)
-    -- 直接把 Kick 函数替换成空操作，服务器调用就直接无效
-    return task.wait(9e9)
+-- 全局开关
+local AntiKickEnabled = false
+local KickHooked = false
+local CharacterConnection
+local AncestryConnection
+local TeleportConnection
+
+-- 1. 创建原生UI（不会被检测）
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "AntiKickUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = lp.PlayerGui
+
+-- 主窗口
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 220, 0, 150)
+MainFrame.Position = UDim2.new(0.05, 0, 0.05, 0)
+MainFrame.BackgroundColor3 = Color3.new(0.1, 0.1, 0.15)
+MainFrame.BorderColor3 = Color3.new(0.3, 0.6, 1)
+MainFrame.BorderSizePixel = 2
+MainFrame.Parent = ScreenGui
+
+-- 标题
+local Title = Instance.new("TextLabel")
+Title.Name = "Title"
+Title.Size = UDim2.new(1, 0, 0, 30)
+Title.Position = UDim2.new(0, 0, 0, 0)
+Title.BackgroundTransparency = 1
+Title.Text = "低检测防踢"
+Title.TextColor3 = Color3.new(1, 1, 1)
+Title.Font = Enum.Font.SourceSansBold
+Title.TextSize = 18
+Title.Parent = MainFrame
+
+-- 开关按钮
+local ToggleButton = Instance.new("TextButton")
+ToggleButton.Name = "ToggleButton"
+ToggleButton.Size = UDim2.new(0.8, 0, 0, 40)
+ToggleButton.Position = UDim2.new(0.1, 0, 0, 40)
+ToggleButton.BackgroundColor3 = Color3.new(0.2, 0.4, 0.6)
+ToggleButton.BorderColor3 = Color3.new(0.3, 0.6, 1)
+ToggleButton.BorderSizePixel = 1
+ToggleButton.Text = "点击开启"
+ToggleButton.TextColor3 = Color3.new(1, 1, 1)
+ToggleButton.Font = Enum.Font.SourceSans
+ToggleButton.TextSize = 16
+ToggleButton.Parent = MainFrame
+
+-- 状态显示
+local StatusLabel = Instance.new("TextLabel")
+StatusLabel.Name = "StatusLabel"
+StatusLabel.Size = UDim2.new(1, 0, 0, 30)
+StatusLabel.Position = UDim2.new(0, 0, 0, 90)
+StatusLabel.BackgroundTransparency = 1
+StatusLabel.Text = "状态: 已关闭"
+StatusLabel.TextColor3 = Color3.new(0.7, 0.7, 0.7)
+StatusLabel.Font = Enum.Font.SourceSans
+StatusLabel.TextSize = 14
+StatusLabel.Parent = MainFrame
+
+-- 防踢核心逻辑
+local function EnableAntiKick()
+    if KickHooked then return end
+    KickHooked = true
+
+    -- 替换Kick函数（不碰namecall）
+    local oldKick
+    oldKick = lp.Kick
+    lp.Kick = function(self, ...)
+        return task.wait(9e9)
+    end
+
+    -- 角色重载保护
+    CharacterConnection = lp.CharacterRemoving:Connect(function()
+        task.wait(0.3)
+        if lp.Parent then lp:LoadCharacter() end
+    end)
+
+    -- 父级移除保护
+    AncestryConnection = lp.AncestryChanged:Connect(function(_, parent)
+        if parent ~= Players then lp.Parent = Players end
+    end)
+
+    -- 传送保护
+    TeleportConnection = lp.OnTeleport:Connect(function(state)
+        if state == Enum.TeleportState.Started then
+            task.wait(0.3)
+            TeleportService:Teleport(game.PlaceId, lp)
+        end
+    end)
+
+    -- 更新UI
+    ToggleButton.Text = "点击关闭"
+    ToggleButton.BackgroundColor3 = Color3.new(0.2, 0.6, 0.4)
+    StatusLabel.Text = "状态: 已开启 ✅"
+    StatusLabel.TextColor3 = Color3.new(0.3, 1, 0.5)
+
+    StarterGui:SetCore("SendNotification", {
+        Title = "防踢已开启",
+        Text = "低检测模式运行中",
+        Duration = 3
+    })
 end
 
--- 角色被移除时自动复活
-lp.CharacterRemoving:Connect(function()
-    task.wait(0.3)
-    if lp.Parent then
-        lp:LoadCharacter()
+local function DisableAntiKick()
+    if not KickHooked then return end
+    KickHooked = false
+
+    -- 恢复原始Kick函数
+    lp.Kick = oldKick
+
+    -- 断开所有连接
+    if CharacterConnection then CharacterConnection:Disconnect() end
+    if AncestryConnection then AncestryConnection:Disconnect() end
+    if TeleportConnection then TeleportConnection:Disconnect() end
+
+    -- 更新UI
+    ToggleButton.Text = "点击开启"
+    ToggleButton.BackgroundColor3 = Color3.new(0.2, 0.4, 0.6)
+    StatusLabel.Text = "状态: 已关闭 ❌"
+    StatusLabel.TextColor3 = Color3.new(1, 0.5, 0.5)
+
+    StarterGui:SetCore("SendNotification", {
+        Title = "防踢已关闭",
+        Text = "恢复正常状态",
+        Duration = 3
+    })
+end
+
+-- 按钮点击事件
+ToggleButton.MouseButton1Click:Connect(function()
+    AntiKickEnabled = not AntiKickEnabled
+    if AntiKickEnabled then
+        EnableAntiKick()
+    else
+        DisableAntiKick()
     end
 end)
 
--- 传送防踢，防止被强制跳转
-lp.OnTeleport:Connect(function(state)
-    if state == Enum.TeleportState.Started then
-        task.wait(0.3)
-        TeleportService:Teleport(game.PlaceId, lp)
+-- 窗口拖拽功能（可选，方便移动）
+local dragging = false
+local dragStart
+local startPos
+
+MainFrame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = MainFrame.Position
     end
 end)
 
--- 防止服务器用 Destroy 踢人
-lp.AncestryChanged:Connect(function(_, parent)
-    if parent ~= Players then
-        lp.Parent = Players
+MainFrame.InputChanged:Connect(function(input)
+    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local delta = input.Position - dragStart
+        MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
     end
 end)
 
--- 提示（只弹一次）
-game.StarterGui:SetCore("SendNotification", {
-    Title = "Anti-Kick Loaded",
-    Text = "No Namecall Hook Used",
+MainFrame.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = false
+    end
+end)
+
+-- 加载完成提示
+StarterGui:SetCore("SendNotification", {
+    Title = "UI加载完成",
+    Text = "低检测防踢就绪",
     Duration = 3
 })
