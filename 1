@@ -1,13 +1,13 @@
--- 稳定版 · 不自动跳底 + 日志可开关 · 控制台+防踢
+-- 手机版 · 每条新日志单独一行 · 不跳不覆盖
 local Players = game:GetService("Players")
 local StarterGui = game:GetService("StarterGui")
 local LogService = game:GetService("LogService")
 local lp = Players.LocalPlayer
 
 local AntiKickActive = false
-local LoggingEnabled = true  -- 日志总开关
 local KickAttempts = 0
 local oldKick, ancestryConn
+local ConsoleVisible = true
 
 -- 创建界面
 local sg = Instance.new("ScreenGui")
@@ -16,27 +16,27 @@ sg.ResetOnSpawn = false
 sg.Parent = lp.PlayerGui
 
 local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 340, 0, 280)
+frame.Size = UDim2.new(0, 320, 0, 270)
 frame.Position = UDim2.new(0.02, 0, 0.02, 0)
-frame.BackgroundColor3 = Color3.new(0.07,0.07,0.1)
+frame.BackgroundColor3 = Color3.new(0.07,0.07,0.12)
 frame.BorderColor3 = Color3.new(0, 0.7, 1)
 frame.BorderSizePixel = 2
 frame.Parent = sg
 
 -- 标题
 local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1,0,0,24)
+title.Size = UDim2.new(1,0,0,26)
 title.BackgroundColor3 = Color3.new(0, 0.7, 1)
-title.Text = "LOG CONSOLE | ANTI KICK"
+title.Text = "CONSOLE & ANTIKICK"
 title.TextColor3 = Color3.new(0,0,0)
 title.Font = Enum.Font.Code
 title.TextSize = 14
 title.Parent = frame
 
--- 日志区域（重点：不自动跳到底部）
+-- 日志区域
 local logArea = Instance.new("ScrollingFrame")
-logArea.Size = UDim2.new(1,-10,0.68,-24)
-logArea.Position = UDim2.new(0,5,0,24)
+logArea.Size = UDim2.new(1,-10,0.65,-26)
+logArea.Position = UDim2.new(0,5,0,26)
 logArea.BackgroundTransparency = 1
 logArea.ScrollBarThickness = 6
 logArea.ScrollingEnabled = true
@@ -47,15 +47,15 @@ list.Parent = logArea
 list.SortOrder = Enum.SortOrder.LayoutOrder
 list.Padding = UDim.new(0, 2)
 
--- 只自动改高度，不跳位置！
+-- 自动扩展高度，每条日志单独一行
 list:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
     logArea.CanvasSize = UDim2.new(0, 0, list.AbsoluteContentSize.Y + 20, 0)
 end)
 
 -- 状态
 local status = Instance.new("TextLabel")
-status.Size = UDim2.new(0.7,0,0.1,0)
-status.Position = UDim2.new(0,5,0.72,0)
+status.Size = UDim2.new(1,-10,0.09,0)
+status.Position = UDim2.new(0,5,0.7,0)
 status.BackgroundTransparency = 1
 status.Text = "ANTIKICK: OFF"
 status.TextColor3 = Color3.new(1,0.2,0.2)
@@ -63,102 +63,79 @@ status.Font = Enum.Font.Code
 status.TextSize = 13
 status.Parent = frame
 
--- 防踢开关
-local btnAntiKick = Instance.new("TextButton")
-btnAntiKick.Size = UDim2.new(0.25,0,0.1,0)
-btnAntiKick.Position = UDim2.new(0.7,0,0.72,0)
-btnAntiKick.BackgroundColor3 = Color3.new(0.2,0.3,0.4)
-btnAntiKick.Text = "START"
-btnAntiKick.TextColor3 = Color3.new(1,1,1)
-btnAntiKick.Font = Enum.Font.Code
-btnAntiKick.TextSize = 13
-btnAntiKick.Parent = frame
+-- 按钮1：防踢开关
+local btnToggle = Instance.new("TextButton")
+btnToggle.Size = UDim2.new(0.42,0,0.14,0)
+btnToggle.Position = UDim2.new(0.05,0,0.8,0)
+btnToggle.BackgroundColor3 = Color3.new(0.2,0.3,0.4)
+btnToggle.Text = "ANTIKICK"
+btnToggle.TextColor3 = Color3.new(1,1,1)
+btnToggle.Font = Enum.Font.Code
+btnToggle.TextSize = 13
+btnToggle.Parent = frame
 
--- 日志开关（你要的）
-local btnLogToggle = Instance.new("TextButton")
-btnLogToggle.Size = UDim2.new(0.4,0,0.12,0)
-btnLogToggle.Position = UDim2.new(0.05,0,0.84,0)
-btnLogToggle.BackgroundColor3 = Color3.new(0.1,0.4,0.2)
-btnLogToggle.Text = "LOG: ON"
-btnLogToggle.TextColor3 = Color3.new(1,1,1)
-btnLogToggle.Font = Enum.Font.Code
-btnLogToggle.TextSize = 13
-btnLogToggle.Parent = frame
+-- 按钮2：显示/隐藏界面
+local btnShowHide = Instance.new("TextButton")
+btnShowHide.Size = UDim2.new(0.42,0,0.14,0)
+btnShowHide.Position = UDim2.new(0.53,0,0.8,0)
+btnShowHide.BackgroundColor3 = Color3.new(0.1,0.4,0.2)
+btnShowHide.Text = "HIDE"
+btnShowHide.TextColor3 = Color3.new(1,1,1)
+btnToggle.Font = Enum.Font.Code
+btnShowHide.TextSize = 13
+btnShowHide.Parent = frame
 
--- 清空日志按钮
-local btnClearLog = Instance.new("TextButton")
-btnClearLog.Size = UDim2.new(0.4,0,0.12,0)
-btnClearLog.Position = UDim2.new(0.55,0,0.84,0)
-btnClearLog.BackgroundColor3 = Color3.new(0.4,0.1,0.1)
-btnClearLog.Text = "CLEAR LOG"
-btnClearLog.TextColor3 = Color3.new(1,1,1)
-btnClearLog.Font = Enum.Font.Code
-btnClearLog.TextSize = 13
-btnClearLog.Parent = frame
-
--- 窗口拖动
-local drag, dragStart, framePos
+-- 窗口可拖动
+local drag, dragStart, pos
 frame.InputBegan:Connect(function(i)
-    if i.UserInputType == Enum.UserInputType.MouseButton1 then
+    if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
         drag = true
         dragStart = i.Position
-        framePos = frame.Position
+        pos = frame.Position
     end
 end)
 frame.InputChanged:Connect(function(i)
-    if drag and i.UserInputType == Enum.UserInputType.MouseMovement then
+    if drag and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
         local delta = i.Position - dragStart
-        frame.Position = UDim2.new(framePos.X.Scale, framePos.X.Offset+delta.X, framePos.Y.Scale, framePos.Y.Offset+delta.Y)
+        frame.Position = UDim2.new(pos.X.Scale, pos.X.Offset + delta.X, pos.Y.Scale, pos.Y.Offset + delta.Y)
     end
 end)
 frame.InputEnded:Connect(function(i)
-    if i.UserInputType == Enum.UserInputType.MouseButton1 then
+    if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
         drag = false
     end
 end)
 
--- 日志输出
+-- 每条新日志 = 新建一行（你要的效果）
 local function addLog(msg, color)
-    if not LoggingEnabled then return end  -- 关了就不打印
-
-    local l = Instance.new("TextLabel")
-    l.Size = UDim2.new(1,0,0,14)
-    l.BackgroundTransparency = 1
-    l.Text = "["..os.date("%H:%M:%S").."] "..msg
-    l.TextColor3 = color or Color3.new(1,1,1)
-    l.Font = Enum.Font.Code
-    l.TextSize = 10
-    l.Parent = logArea
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 0, 14)
+    label.BackgroundTransparency = 1
+    label.Text = "[" .. os.date("%H:%M:%S") .. "] " .. msg
+    label.TextColor3 = color or Color3.new(1,1,1)
+    label.Font = Enum.Font.Code
+    label.TextSize = 10
+    label.Parent = logArea
 end
 
--- 日志开关
-btnLogToggle.MouseButton1Click:Connect(function()
-    LoggingEnabled = not LoggingEnabled
-    btnLogToggle.Text = LoggingEnabled and "LOG: ON" or "LOG: OFF"
-    btnLogToggle.BackgroundColor3 = LoggingEnabled and Color3.new(0.1,0.4,0.2) or Color3.new(0.3,0.1,0.1)
-    addLog(LoggingEnabled and "日志已开启" or "日志已关闭", LoggingEnabled and Color3.new(0,1,0.4) or Color3.new(1,0.4,0.4))
+-- 显示/隐藏界面
+btnShowHide.MouseButton1Click:Connect(function()
+    ConsoleVisible = not ConsoleVisible
+    frame.Visible = ConsoleVisible
+    btnShowHide.Text = ConsoleVisible and "HIDE" or "SHOW"
+    btnShowHide.BackgroundColor3 = ConsoleVisible and Color3.new(0.1,0.4,0.2) or Color3.new(0.4,0.1,0.1)
 end)
 
--- 清空日志
-btnClearLog.MouseButton1Click:Connect(function()
-    for _,v in pairs(logArea:GetChildren()) do
-        if v:IsA("TextLabel") then v:Destroy() end
-    end
-    addLog("日志已清空", Color3.new(0.6,0.6,1))
-end)
-
--- 记录控制台信息
+-- 日志监听
 LogService.MessageOut:Connect(function(msg, t)
-    if not LoggingEnabled then return end
-
     if t == Enum.MessageType.MessageError then
-        addLog("[ERROR] "..msg, Color3.new(1,0,0))
+        addLog("[ERROR] " .. msg, Color3.new(1,0,0))
     elseif t == Enum.MessageType.MessageWarning then
-        addLog("[WARN] "..msg, Color3.new(1,1,0))
+        addLog("[WARN] " .. msg, Color3.new(1,1,0))
     elseif t == Enum.MessageType.MessageInfo then
-        addLog("[INFO] "..msg, Color3.new(0,1,1))
+        addLog("[INFO] " .. msg, Color3.new(0,1,1))
     elseif t == Enum.MessageType.MessageOutput then
-        addLog("[PRINT] "..msg, Color3.new(0.4,0.8,1))
+        addLog("[PRINT] " .. msg, Color3.new(0.4,0.8,1))
     end
 end)
 
@@ -169,7 +146,7 @@ local function enableAK()
         oldKick = lp.Kick
         lp.Kick = function(...)
             KickAttempts += 1
-            addLog("[BLOCKED] Kick attempt #"..KickAttempts, Color3.new(1, 0.5, 0))
+            addLog("[BLOCKED] Kick #" .. KickAttempts, Color3.new(1, 0.5, 0))
             return task.wait(9e9)
         end
     end)
@@ -178,11 +155,10 @@ local function enableAK()
         if p ~= Players then lp.Parent = Players end
     end)
 
-    status.Text = "ANTIKICK: ON | BLOCKED: "..KickAttempts
+    status.Text = "ANTIKICK: ON | BLOCKED: " .. KickAttempts
     status.TextColor3 = Color3.new(0,1,0.4)
-    btnAntiKick.Text = "STOP"
-    btnAntiKick.BackgroundColor3 = Color3.new(0.6,0,0)
-    addLog("防踢已开启", Color3.new(0,1,0.4))
+    btnToggle.BackgroundColor3 = Color3.new(0.7,0,0)
+    addLog("防踢已启动", Color3.new(0,1,0.4))
 end
 
 local function disableAK()
@@ -190,16 +166,15 @@ local function disableAK()
     pcall(function() if oldKick then lp.Kick = oldKick end end)
     if ancestryConn then ancestryConn:Disconnect() end
 
-    status.Text = "ANTIKICK: OFF | BLOCKED: "..KickAttempts
+    status.Text = "ANTIKICK: OFF | BLOCKED: " .. KickAttempts
     status.TextColor3 = Color3.new(1,0.2,0.2)
-    btnAntiKick.Text = "START"
-    btnAntiKick.BackgroundColor3 = Color3.new(0.2,0.3,0.4)
+    btnToggle.BackgroundColor3 = Color3.new(0.2,0.3,0.4)
     addLog("防踢已关闭", Color3.new(1,0.2,0.2))
 end
 
-btnAntiKick.MouseButton1Click:Connect(function()
+btnToggle.MouseButton1Click:Connect(function()
     if AntiKickActive then disableAK() else enableAK() end
 end)
 
-addLog("控制台已加载 · 滚动正常", Color3.new(0,1,1))
-addLog("新消息不会自动跳到底部", Color3.new(0,1,1))
+addLog("控制台已加载", Color3.new(0,1,1))
+addLog("每条新日志 = 新建一行", Color3.new(0,1,1))
