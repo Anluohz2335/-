@@ -1,4 +1,4 @@
--- 手机版 · 隐藏后有小按钮可重新打开 · 每条日志新一行
+-- 手机最终版 · 防踢+日志自动滚动+隐藏可打开+无多余行
 local Players = game:GetService("Players")
 local StarterGui = game:GetService("StarterGui")
 local LogService = game:GetService("LogService")
@@ -48,7 +48,9 @@ list.SortOrder = Enum.SortOrder.LayoutOrder
 list.Padding = UDim.new(0, 2)
 
 list:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-    logArea.CanvasSize = UDim2.new(0,0, list.AbsoluteContentSize.Y + 20, 0)
+    logArea.CanvasSize = UDim2.new(0, 0, list.AbsoluteContentSize.Y + 20, 0)
+    -- 自动滚动到底（你要的）
+    logArea.CanvasPosition = Vector2.new(0, logArea.AbsoluteCanvasSize.Y)
 end)
 
 -- 状态
@@ -83,7 +85,7 @@ btnShowHide.TextColor3 = Color3.new(1,1,1)
 btnShowHide.TextSize = 13
 btnShowHide.Parent = frame
 
--- 悬浮小按钮（隐藏后用来打开）
+-- 悬浮打开按钮
 local floatBtn = Instance.new("TextButton")
 floatBtn.Size = UDim2.new(0, 70, 0, 40)
 floatBtn.Position = UDim2.new(0.02, 0, 0.85, 0)
@@ -116,7 +118,7 @@ frame.InputEnded:Connect(function(i)
     end
 end)
 
--- 日志函数
+-- 日志：来一条加一行
 local function addLog(msg, color)
     local label = Instance.new("TextLabel")
     label.Size = UDim2.new(1,0,0,14)
@@ -128,23 +130,20 @@ local function addLog(msg, color)
     label.Parent = logArea
 end
 
--- 显示 / 隐藏 + 悬浮按钮
+-- 显示 / 隐藏
 btnShowHide.MouseButton1Click:Connect(function()
     ConsoleVisible = not ConsoleVisible
     frame.Visible = ConsoleVisible
-    floatBtn.Visible = not ConsoleVisible  -- 隐藏控制台就显示小按钮
-    
+    floatBtn.Visible = not ConsoleVisible
     btnShowHide.Text = ConsoleVisible and "HIDE" or "SHOW"
-    btnShowHide.BackgroundColor3 = ConsoleVisible and Color3.new(0.1,0.4,0.2) or Color3.new(0.4,0.1,0.1)
 end)
 
--- 点小按钮重新打开
+-- 打开
 floatBtn.MouseButton1Click:Connect(function()
     ConsoleVisible = true
     frame.Visible = true
     floatBtn.Visible = false
     btnShowHide.Text = "HIDE"
-    btnShowHide.BackgroundColor3 = Color3.new(0.1,0.4,0.2)
 end)
 
 -- 日志监听
@@ -179,7 +178,6 @@ local function enableAK()
     status.Text = "ANTIKICK: ON | BLOCKED: "..KickAttempts
     status.TextColor3 = Color3.new(0,1,0.4)
     btnToggle.BackgroundColor3 = Color3.new(0.7,0,0)
-    addLog("防踢已启动", Color3.new(0,1,0.4))
 end
 
 local function disableAK()
@@ -190,12 +188,8 @@ local function disableAK()
     status.Text = "ANTIKICK: OFF | BLOCKED: "..KickAttempts
     status.TextColor3 = Color3.new(1,0.2,0.2)
     btnToggle.BackgroundColor3 = Color3.new(0.2,0.3,0.4)
-    addLog("防踢已关闭", Color3.new(1,0.2,0.2))
 end
 
 btnToggle.MouseButton1Click:Connect(function()
     if AntiKickActive then disableAK() else enableAK() end
 end)
-
-addLog("控制台加载完成", Color3.new(0,1,1))
-addLog("隐藏后点左下角 OPEN 打开", Color3.new(0,1,1))
