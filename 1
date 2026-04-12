@@ -1,219 +1,165 @@
--- 控制台风格防踢 | 低检测版
+-- 完整日志记录 + 防踢（包含蓝色日志）
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
 local StarterGui = game:GetService("StarterGui")
+local LogService = game:GetService("LogService")
 local lp = Players.LocalPlayer
 
--- 全局变量
 local AntiKickActive = false
 local KickAttempts = 0
-local oldKick
-local AncestryConn
-local UI
+local oldKick, AncestryConn
+local UI = {}
 
--- 1. 创建控制台UI
 local function CreateConsole()
-    -- 主界面容器
-    UI = Instance.new("ScreenGui")
-    UI.Name = "ConsoleAntiKick"
-    UI.ResetOnSpawn = false
-    UI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    UI.Parent = lp.PlayerGui
+    local ScreenGui = Instance.new("ScreenGui")
+    ScreenGui.Name = "FullLogConsole"
+    ScreenGui.ResetOnSpawn = false
+    ScreenGui.Parent = lp.PlayerGui
 
-    -- 控制台窗口
     local ConsoleFrame = Instance.new("Frame")
-    ConsoleFrame.Name = "ConsoleFrame"
-    ConsoleFrame.Size = UDim2.new(0, 300, 0, 200)
+    ConsoleFrame.Size = UDim2.new(0, 360, 0, 270)
     ConsoleFrame.Position = UDim2.new(0.02, 0, 0.02, 0)
-    ConsoleFrame.BackgroundColor3 = Color3.new(0.05, 0.05, 0.08)
-    ConsoleFrame.BorderColor3 = Color3.new(0, 0.8, 0.3)
+    ConsoleFrame.BackgroundColor3 = Color3.new(0.05,0.05,0.08)
+    ConsoleFrame.BorderColor3 = Color3.new(0,0.8,0.3)
     ConsoleFrame.BorderSizePixel = 2
-    ConsoleFrame.Parent = UI
-
-    -- 标题栏
-    local TitleBar = Instance.new("Frame")
-    TitleBar.Name = "TitleBar"
-    TitleBar.Size = UDim2.new(1, 0, 0, 25)
-    TitleBar.BackgroundColor3 = Color3.new(0, 0.8, 0.3)
-    TitleBar.Parent = ConsoleFrame
+    ConsoleFrame.Parent = ScreenGui
 
     local Title = Instance.new("TextLabel")
-    Title.Name = "Title"
-    Title.Size = UDim2.new(1, -10, 1, 0)
-    Title.Position = UDim2.new(0, 10, 0, 0)
-    Title.BackgroundTransparency = 1
-    Title.Text = "AntiKick Console v1.0"
-    Title.TextColor3 = Color3.new(0, 0, 0)
+    Title.Size = UDim2.new(1,0,0,25)
+    Title.BackgroundColor3 = Color3.new(0,0.8,0.3)
+    Title.Text = "Full Log Recorder & AntiKick"
+    Title.TextColor3 = Color3.new(0,0,0)
     Title.Font = Enum.Font.Code
     Title.TextSize = 14
-    Title.TextXAlignment = Enum.TextXAlignment.Left
-    Title.Parent = TitleBar
+    Title.Parent = ConsoleFrame
 
-    -- 日志区域
     local LogFrame = Instance.new("ScrollingFrame")
-    LogFrame.Name = "LogFrame"
-    LogFrame.Size = UDim2.new(1, -10, 0.7, -30)
-    LogFrame.Position = UDim2.new(0, 5, 0, 30)
+    LogFrame.Size = UDim2.new(1,-10,0.78,-30)
+    LogFrame.Position = UDim2.new(0,5,0,30)
     LogFrame.BackgroundTransparency = 1
-    LogFrame.CanvasSize = UDim2.new(0, 0, 2, 0)
-    LogFrame.ScrollBarThickness = 4
+    LogFrame.ScrollBarThickness = 6
     LogFrame.Parent = ConsoleFrame
 
     local LogList = Instance.new("UIListLayout")
     LogList.Parent = LogFrame
     LogList.SortOrder = Enum.SortOrder.LayoutOrder
-    LogList.Padding = UDim.new(0, 2)
-
-    -- 状态显示
-    local StatusFrame = Instance.new("Frame")
-    StatusFrame.Name = "StatusFrame"
-    StatusFrame.Size = UDim2.new(1, -10, 0.15, 0)
-    StatusFrame.Position = UDim2.new(0, 5, 0.8, 0)
-    StatusFrame.BackgroundTransparency = 1
-    StatusFrame.Parent = ConsoleFrame
-
-    local StatusLabel = Instance.new("TextLabel")
-    StatusLabel.Name = "StatusLabel"
-    StatusLabel.Size = UDim2.new(0.7, 0, 1, 0)
-    StatusLabel.BackgroundTransparency = 1
-    StatusLabel.Text = "Status: OFFLINE | Kicks Blocked: 0"
-    StatusLabel.TextColor3 = Color3.new(1, 0.3, 0.3)
-    StatusLabel.Font = Enum.Font.Code
-    StatusLabel.TextSize = 12
-    StatusLabel.TextXAlignment = Enum.TextXAlignment.Left
-    StatusLabel.Parent = StatusFrame
-
-    -- 开关按钮
-    local ToggleButton = Instance.new("TextButton")
-    ToggleButton.Name = "ToggleButton"
-    ToggleButton.Size = UDim2.new(0.25, 0, 0.15, 0)
-    ToggleButton.Position = UDim2.new(0.72, 0, 0.8, 0)
-    ToggleButton.BackgroundColor3 = Color3.new(0.3, 0.3, 0.3)
-    ToggleButton.BorderColor3 = Color3.new(0, 0.8, 0.3)
-    ToggleButton.BorderSizePixel = 1
-    ToggleButton.Text = "START"
-    ToggleButton.TextColor3 = Color3.new(1, 1, 1)
-    ToggleButton.Font = Enum.Font.Code
-    ToggleButton.TextSize = 12
-    ToggleButton.Parent = ConsoleFrame
-
-    -- 窗口拖拽功能
-    local dragging, dragStart, startPos
-    ConsoleFrame.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = true
-            dragStart = input.Position
-            startPos = ConsoleFrame.Position
-        end
-    end)
-    ConsoleFrame.InputChanged:Connect(function(input)
-        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-            local delta = input.Position - dragStart
-            ConsoleFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-        end
-    end)
-    ConsoleFrame.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = false
-        end
+    LogList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        LogFrame.CanvasSize = UDim2.new(0,0,LogList.AbsoluteContentSize.Y,0)
+        LogFrame.CanvasPosition = Vector2.new(0, 9e9)
     end)
 
-    return {
-        LogFrame = LogFrame,
-        StatusLabel = StatusLabel,
-        ToggleButton = ToggleButton
-    }
+    local Status = Instance.new("TextLabel")
+    Status.Size = UDim2.new(0.7,0,0.1,0)
+    Status.Position = UDim2.new(0,5,0.85,0)
+    Status.BackgroundTransparency = 1
+    Status.Text = "STATUS: OFFLINE"
+    Status.TextColor3 = Color3.new(1,0.3,0.3)
+    Status.Font = Enum.Font.Code
+    Status.TextSize = 12
+    Status.Parent = ConsoleFrame
+
+    local Btn = Instance.new("TextButton")
+    Btn.Size = UDim2.new(0.25,0,0.1,0)
+    Btn.Position = UDim2.new(0.7,0,0.85,0)
+    Btn.BackgroundColor3 = Color3.new(0.3,0.3,0.3)
+    Btn.BorderColor3 = Color3.new(0,0.8,0.3)
+    Btn.Text = "START"
+    Btn.TextColor3 = Color3.new(1,1,1)
+    Btn.Font = Enum.Font.Code
+    Btn.TextSize = 12
+    Btn.Parent = ConsoleFrame
+
+    -- 拖拽
+    local drag, start, pos
+    ConsoleFrame.InputBegan:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 then
+            drag = true start = i.Position pos = ConsoleFrame.Position
+        end
+    end)
+    ConsoleFrame.InputChanged:Connect(function(i)
+        if drag then
+            local d = i.Position - start
+            ConsoleFrame.Position = UDim2.new(pos.X.Scale, pos.X.Offset+d.X, pos.Y.Scale, pos.Y.Offset+d.Y)
+        end
+    end)
+    ConsoleFrame.InputEnded:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 then drag = false end
+    end)
+
+    UI = {LogFrame=LogFrame, Status=Status, Btn=Btn}
 end
 
--- 添加日志到控制台
-local function AddLog(text, color)
-    if not UI then return end
-    local log = Instance.new("TextLabel")
-    log.Size = UDim2.new(1, 0, 0, 16)
-    log.BackgroundTransparency = 1
-    log.Text = "[" .. os.date("%H:%M:%S") .. "] " .. text
-    log.TextColor3 = color or Color3.new(0, 1, 0.3)
-    log.Font = Enum.Font.Code
-    log.TextSize = 11
-    log.TextXAlignment = Enum.TextXAlignment.Left
-    log.Parent = UI.LogFrame
-    UI.LogFrame.CanvasSize = UDim2.new(0, 0, UI.LogFrame.UIListLayout.AbsoluteContentSize.Y, 0)
+local function AddLog(msg, color)
+    local l = Instance.new("TextLabel")
+    l.Size = UDim2.new(1,0,0,14)
+    l.BackgroundTransparency = 1
+    l.Text = "["..os.date("%H:%M:%S").."] "..msg
+    l.TextColor3 = color or Color3.new(1,1,1)
+    l.Font = Enum.Font.Code
+    l.TextSize = 10
+    l.Parent = UI.LogFrame
 end
 
--- 更新状态显示
-local function UpdateStatus()
-    if not UI then return end
-    if AntiKickActive then
-        UI.StatusLabel.Text = "Status: ONLINE | Kicks Blocked: " .. KickAttempts
-        UI.StatusLabel.TextColor3 = Color3.new(0, 1, 0.3)
-        UI.ToggleButton.Text = "STOP"
-        UI.ToggleButton.BackgroundColor3 = Color3.new(1, 0.3, 0.3)
-    else
-        UI.StatusLabel.Text = "Status: OFFLINE | Kicks Blocked: " .. KickAttempts
-        UI.StatusLabel.TextColor3 = Color3.new(1, 0.3, 0.3)
-        UI.ToggleButton.Text = "START"
-        UI.ToggleButton.BackgroundColor3 = Color3.new(0.3, 0.3, 0.3)
-    end
+-- 监听所有日志（包括蓝色）
+local function StartLog()
+    LogService.MessageOut:Connect(function(msg, typ)
+        if typ == Enum.MessageType.MessageError then
+            AddLog("[ERROR] "..msg, Color3.new(1,0,0))
+        elseif typ == Enum.MessageType.MessageWarning then
+            AddLog("[WARN] "..msg, Color3.new(1,1,0))
+        elseif typ == Enum.MessageType.MessageInfo then
+            AddLog("[INFO] "..msg, Color3.new(0,1,1)) -- 蓝色
+        elseif typ == Enum.MessageType.MessageOutput then
+            AddLog("[PRINT] "..msg, Color3.new(0.4,0.8,1)) -- 亮蓝
+        end
+    end)
+    AddLog("Log recorder started (all colors)", Color3.new(0,1,0))
 end
 
--- 防踢核心逻辑
 local function EnableAntiKick()
     if AntiKickActive then return end
     AntiKickActive = true
 
-    -- 替换Kick函数
     pcall(function()
         oldKick = lp.Kick
         lp.Kick = function(...)
-            KickAttempts = KickAttempts + 1
-            AddLog("BLOCKED Kick Attempt #" .. KickAttempts, Color3.new(1, 1, 0))
-            StarterGui:SetCore("SendNotification", {
-                Title = "Kick Blocked",
-                Text = "Attempt #" .. KickAttempts,
-                Duration = 2
+            KickAttempts += 1
+            AddLog("[ANTIKICK] Blocked kick #"..KickAttempts, Color3.new(1,0.5,0))
+            StarterGui:SetCore("SendNotification",{
+                Title="Kick Blocked", Text="Attempt "..KickAttempts, Duration=2
             })
             return task.wait(math.huge)
         end
     end)
 
-    -- 祖先保护
-    AncestryConn = lp.AncestryChanged:Connect(function(_, newParent)
-        if newParent ~= Players then
-            AddLog("Recovered from Ancestry Removal", Color3.new(1, 0.5, 0))
-            lp.Parent = Players
-        end
+    AncestryConn = lp.AncestryChanged:Connect(function(_,p)
+        if p ~= Players then lp.Parent = Players end
     end)
 
-    AddLog("AntiKick Enabled", Color3.new(0, 1, 0.3))
-    UpdateStatus()
+    UI.Status.Text = "STATUS: ONLINE | BLOCKED: "..KickAttempts
+    UI.Status.TextColor3 = Color3.new(0,1,0)
+    UI.Btn.Text = "STOP"
+    UI.Btn.BackgroundColor3 = Color3.new(1,0.2,0.2)
+    AddLog("AntiKick enabled", Color3.new(0,1,0))
 end
 
 local function DisableAntiKick()
     if not AntiKickActive then return end
     AntiKickActive = false
 
-    -- 恢复Kick函数
-    pcall(function()
-        if oldKick then lp.Kick = oldKick end
-    end)
-
-    -- 断开连接
+    pcall(function() if oldKick then lp.Kick = oldKick end end)
     if AncestryConn then AncestryConn:Disconnect() end
 
-    AddLog("AntiKick Disabled", Color3.new(1, 0.3, 0.3))
-    UpdateStatus()
+    UI.Status.Text = "STATUS: OFFLINE | BLOCKED: "..KickAttempts
+    UI.Status.TextColor3 = Color3.new(1,0.3,0.3)
+    UI.Btn.Text = "START"
+    UI.Btn.BackgroundColor3 = Color3.new(0.3,0.3,0.3)
+    AddLog("AntiKick disabled", Color3.new(1,0.3,0.3))
 end
 
--- 主程序入口
-UI = CreateConsole()
-AddLog("Console Initialized", Color3.new(0, 0.8, 1))
-AddLog("Press START to activate AntiKick", Color3.new(0.8, 0.8, 0.8))
+CreateConsole()
+StartLog()
+AddLog("UI loaded. Press START to enable anti-kick.", Color3.new(0.8,0.8,0.8))
 
--- 按钮事件
-UI.ToggleButton.MouseButton1Click:Connect(function()
-    if AntiKickActive then
-        DisableAntiKick()
-    else
-        EnableAntiKick()
-    end
+UI.Btn.MouseButton1Click:Connect(function()
+    if AntiKickActive then DisableAntiKick() else EnableAntiKick() end
 end)
