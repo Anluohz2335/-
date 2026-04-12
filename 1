@@ -1,4 +1,4 @@
--- 自定义控制台 · 超紧凑行高 · 完全Dex手感
+-- 自定义控制台 · 行高自适应 + 彻底删除按钮
 local Players = game:GetService("Players")
 local LogService = game:GetService("LogService")
 local UserInputService = game:GetService("UserInputService")
@@ -22,31 +22,51 @@ frame.BorderSizePixel = 0
 frame.ClipsDescendants = true
 frame.Parent = sg
 
+-- 顶部栏
 local topBar = Instance.new("Frame")
 topBar.Size = UDim2.new(1, 0, 0, 26)
 topBar.BackgroundColor3 = Color3.new(0.12, 0.12, 0.18)
 topBar.Parent = frame
 
 local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, -160, 1, 0)
+title.Size = UDim2.new(1, -220, 1, 0)
 title.Position = UDim2.new(0, 6, 0, 0)
 title.BackgroundTransparency = 1
-title.Text = "自定义控制台"
+title.Text = "控制台"
 title.TextColor3 = Color3.new(0.7, 0.9, 1)
 title.Font = Enum.Font.Code
 title.TextSize = 14
 title.Parent = topBar
 
+-- 三个按钮：隐藏 / 清空 / 关闭（删除GUI）
 local btnHide = Instance.new("TextButton")
 btnHide.Size = UDim2.new(0, 60, 0, 22)
-btnHide.Position = UDim2.new(1, -66, 0, 2)
+btnHide.Position = UDim2.new(1, -156, 0, 2)
 btnHide.BackgroundColor3 = Color3.new(0.18, 0.2, 0.28)
 btnHide.Text = "隐藏"
 btnHide.Font = Enum.Font.Code
 btnHide.TextSize = 12
 btnHide.Parent = topBar
 
--- 日志区域
+local btnClear = Instance.new("TextButton")
+btnClear.Size = UDim2.new(0, 60, 0, 22)
+btnClear.Position = UDim2.new(1, -96, 0, 2)
+btnClear.BackgroundColor3 = Color3.new(0.22, 0.14, 0.14)
+btnClear.Text = "清空"
+btnClear.Font = Enum.Font.Code
+btnClear.TextSize = 12
+btnClear.Parent = topBar
+
+local btnClose = Instance.new("TextButton")
+btnClose.Size = UDim2.new(0, 36, 0, 22)
+btnClose.Position = UDim2.new(1, -36, 0, 2)
+btnClose.BackgroundColor3 = Color3.new(0.3, 0.1, 0.1)
+btnClose.Text = "×"
+btnClose.Font = Enum.Font.Code
+btnClose.TextSize = 14
+btnClose.Parent = topBar
+
+-- 日志区域（核心：Canvas 完全自适应，不留空）
 local logArea = Instance.new("ScrollingFrame")
 logArea.Size = UDim2.new(1, -4, 1, -90)
 logArea.Position = UDim2.new(0, 2, 0, 28)
@@ -59,8 +79,9 @@ logArea.Parent = frame
 local list = Instance.new("UIListLayout")
 list.Parent = logArea
 list.SortOrder = Enum.SortOrder.LayoutOrder
-list.Padding = UDim2.new(0, 0) -- 行距0
+list.Padding = UDim2.new(0, 0)
 
+-- 关键：内容多高，画布就多高，不额外加空间
 list:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
     logArea.CanvasSize = UDim2.new(0, 0, list.AbsoluteContentSize.Y, 0)
 end)
@@ -72,18 +93,9 @@ btnBar.Position = UDim2.new(0, 0, 1, -56)
 btnBar.BackgroundColor3 = Color3.new(0.10, 0.10, 0.14)
 btnBar.Parent = frame
 
-local btnClear = Instance.new("TextButton")
-btnClear.Size = UDim2.new(0.32, -2, 0, 28)
-btnClear.Position = UDim2.new(0.01, 0, 0, 2)
-btnClear.BackgroundColor3 = Color3.new(0.18, 0.14, 0.22)
-btnClear.Text = "清空"
-btnClear.Font = Enum.Font.Code
-btnClear.TextSize = 11
-btnClear.Parent = btnBar
-
 local btnFilter = Instance.new("TextButton")
-btnFilter.Size = UDim2.new(0.32, -2, 0, 28)
-btnFilter.Position = UDim2.new(0.34, 0, 0, 2)
+btnFilter.Size = UDim2.new(0.5, -2, 0, 28)
+btnFilter.Position = UDim2.new(0.01, 0, 0, 2)
 btnFilter.BackgroundColor3 = Color3.new(0.14, 0.18, 0.24)
 btnFilter.Text = "过滤: 全部"
 btnFilter.Font = Enum.Font.Code
@@ -91,8 +103,8 @@ btnFilter.TextSize = 11
 btnFilter.Parent = btnBar
 
 local btnAuto = Instance.new("TextButton")
-btnAuto.Size = UDim2.new(0.32, -2, 0, 28)
-btnAuto.Position = UDim2.new(0.67, 0, 0, 2)
+btnAuto.Size = UDim2.new(0.5, -2, 0, 28)
+btnAuto.Position = UDim2.new(0.51, 0, 0, 2)
 btnAuto.BackgroundColor3 = Color3.new(0.16, 0.22, 0.20)
 btnAuto.Text = "自动: 关闭"
 btnAuto.Font = Enum.Font.Code
@@ -124,7 +136,7 @@ btnAK.Font = Enum.Font.Code
 btnAK.TextSize = 12
 btnAK.Parent = bottomBar
 
--- 缩放
+-- 缩放手柄
 local resizeHandle = Instance.new("TextButton")
 resizeHandle.Size = UDim2.new(0, 24, 0, 24)
 resizeHandle.Position = UDim2.new(1, -24, 1, -24)
@@ -149,17 +161,18 @@ floatOpen.Parent = sg
 
 -- 拖动窗口
 local dragging = false
+local dragStart, startPos
 frame.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType.Touch then
         dragging = true
-        _G.dragStart = input.Position
-        _G.startPos = frame.Position
+        dragStart = input.Position
+        startPos = frame.Position
     end
 end)
 UserInputService.InputChanged:Connect(function(input)
-    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType.Touch) then
-        local delta = input.Position - _G.dragStart
-        frame.Position = UDim2.new(_G.startPos.X.Scale, _G.startPos.X.Offset + delta.X, _G.startPos.Y.Scale, _G.startPos.Y.Offset + delta.Y)
+    if dragging then
+        local delta = input.Position - dragStart
+        frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
     end
 end)
 UserInputService.InputEnded:Connect(function(input)
@@ -168,18 +181,19 @@ end)
 
 -- 缩放
 local resizing = false
+local rStart, rSize
 resizeHandle.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType.Touch then
         resizing = true
-        _G.rStart = input.Position
-        _G.rSize = frame.Size
+        rStart = input.Position
+        rSize = frame.Size
     end
 end)
 UserInputService.InputChanged:Connect(function(input)
     if resizing then
-        local delta = input.Position - _G.rStart
-        local w = math.max(260, _G.rSize.X.Offset + delta.X)
-        local h = math.max(240, _G.rSize.Y.Offset + delta.Y)
+        local delta = input.Position - rStart
+        local w = math.max(260, rSize.X.Offset + delta.X)
+        local h = math.max(240, rSize.Y.Offset + delta.Y)
         frame.Size = UDim2.new(0, w, 0, h)
     end
 end)
@@ -187,7 +201,7 @@ UserInputService.InputEnded:Connect(function(input)
     resizing = false
 end)
 
--- 日志输出（关键：行高极小）
+-- 日志输出
 local function addLog(msg, typ, color)
     local show = true
     if filterMode == "错误" and typ ~= "错误" then show = false end
@@ -196,7 +210,7 @@ local function addLog(msg, typ, color)
     if not show then return end
 
     local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, 0, 0, 14) -- 超矮行高
+    label.Size = UDim2.new(1, 0, 0, 14)
     label.BackgroundTransparency = 1
     label.Text = string.format("[%s] %s: %s", os.date("%H:%M:%S"), typ, msg)
     label.TextColor3 = color
@@ -212,7 +226,7 @@ local function addLog(msg, typ, color)
     end
 end
 
--- 清空
+-- 清空日志
 btnClear.MouseButton1Click:Connect(function()
     for _,v in pairs(logArea:GetChildren()) do
         if v:IsA("TextLabel") then v:Destroy() end
@@ -228,13 +242,13 @@ btnFilter.MouseButton1Click:Connect(function()
     btnFilter.Text = "过滤: "..filterMode
 end)
 
--- 自动
+-- 自动滚动
 btnAuto.MouseButton1Click:Connect(function()
     autoScroll = not autoScroll
     btnAuto.Text = autoScroll and "自动: 开启" or "自动: 关闭"
 end)
 
--- 隐藏/显示
+-- 隐藏
 btnHide.MouseButton1Click:Connect(function()
     frame.Visible = false
     floatOpen.Visible = true
@@ -244,7 +258,12 @@ floatOpen.MouseButton1Click:Connect(function()
     floatOpen.Visible = false
 end)
 
--- 监听输出
+-- ✅ 彻底删除整个GUI
+btnClose.MouseButton1Click:Connect(function()
+    sg:Destroy()
+end)
+
+-- 监听print
 LogService.MessageOut:Connect(function(msg, msgType)
     if msgType == Enum.MessageType.MessageOutput then
         addLog(msg, "打印", Color3.new(0.9,0.9,0.9))
