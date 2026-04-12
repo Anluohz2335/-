@@ -1,0 +1,114 @@
+-- 极简稳定版 · 不卡GUI · 日志正常 · 带关闭
+local Players = game:GetService("Players")
+local LogService = game:GetService("LogService")
+local lp = Players.LocalPlayer
+
+local autoScroll = false
+local antiKick = false
+local originalKick = lp.Kick
+
+-- GUI
+local sg = Instance.new("ScreenGui")
+sg.Name = "Console"
+sg.Parent = lp.PlayerGui
+
+local main = Instance.new("Frame")
+main.Size = UDim2.new(0, 360, 0, 320)
+main.Position = UDim2.new(0.05,0,0.05,0)
+main.BackgroundColor3 = Color3.new(.08,.08,.09)
+main.Parent = sg
+
+-- 顶部
+local top = Instance.new("Frame")
+top.Size = UDim2.new(1,0,0,26)
+top.BackgroundColor3 = Color3.new(.13,.13,.15)
+top.Parent = main
+
+local close = Instance.new("TextButton")
+close.Size = UDim2.new(0,30,0,22)
+close.Position = UDim2.new(1,-34,0,2)
+close.BackgroundColor3 = Color3.new(.3,.1,.1)
+close.Text = "X"
+close.TextColor3 = Color3.new(1,1,1)
+close.Parent = top
+
+-- 日志区域（最简单，不卡）
+local log = Instance.new("ScrollingFrame")
+log.Size = UDim2.new(1,-6,1,-60)
+log.Position = UDim2.new(0,3,0,28)
+log.BackgroundTransparency = 1
+log.ScrollBarThickness = 3
+log.Parent = main
+
+local list = Instance.new("UIListLayout")
+list.Parent = log
+list.SortOrder = Enum.LayoutOrder
+
+-- 底部按钮
+local autoBtn = Instance.new("TextButton")
+autoBtn.Size = UDim2.new(0,100,0,24)
+autoBtn.Position = UDim2.new(0,5,1,-30)
+autoBtn.BackgroundColor3 = Color3.new(.15,.18,.22)
+autoBtn.Text = "Auto: Off"
+autoBtn.TextColor3 = Color3.new(1,1,1)
+autoBtn.Parent = main
+
+local akBtn = Instance.new("TextButton")
+akBtn.Size = UDim2.new(0,100,0,24)
+akBtn.Position = UDim2.new(1,-105,1,-30)
+akBtn.BackgroundColor3 = Color3.new(.22,.15,.15)
+akBtn.Text = "Anti: Off"
+akBtn.TextColor3 = Color3.new(1,1,1)
+akBtn.Parent = main
+
+-- 输出日志
+local function add(msg, color)
+    local l = Instance.new("TextLabel")
+    l.Size = UDim2.new(1,0,0,14)
+    l.BackgroundTransparency = 1
+    l.Text = "  "..msg
+    l.TextColor3 = color or Color3.new(.9,.9,.9)
+    l.TextSize = 11
+    l.TextXAlignment = Enum.TextXAlignment.Left
+    l.Parent = log
+
+    if autoScroll then
+        task.wait(0.01)
+        log.CanvasPosition = Vector2.new(0, 9999)
+    end
+end
+
+-- 关闭
+close.MouseButton1Click:Connect(function()
+    sg:Destroy()
+end)
+
+-- 自动
+autoBtn.MouseButton1Click:Connect(function()
+    autoScroll = not autoScroll
+    autoBtn.Text = autoScroll and "Auto: On" or "Auto: Off"
+end)
+
+-- 防踢
+akBtn.MouseButton1Click:Connect(function()
+    antiKick = not antiKick
+    akBtn.Text = antiKick and "Anti: On" or "Anti: Off"
+    if antiKick then
+        lp.Kick = function()
+            add("[Anti] Blocked kick", Color3.new(1,.5,.2))
+            while task.wait(9) do end
+        end
+    else
+        lp.Kick = originalKick
+    end
+end)
+
+-- 监听 print
+LogService.MessageOut:Connect(function(msg, t)
+    local c = Color3.new(.9,.9,.9)
+    if t == Enum.MessageType.MessageWarning then c = Color3.new(1,.8,.2) end
+    if t == Enum.MessageType.MessageError then c = Color3.new(1,.3,.3) end
+    add(msg, c)
+end)
+
+add("Console loaded", Color3.new(.3,1,.7))
