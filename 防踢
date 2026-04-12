@@ -1,9 +1,11 @@
 -- ==============================================
--- 🔥 防踢保护核心（完整版）+ 防本地脚本踢出
+-- 🔥 防踢保护核心 + 多重备用 UI 加载
 -- ==============================================
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
 local HttpService = game:GetService("HttpService")
 local lp = Players.LocalPlayer
 
@@ -11,165 +13,32 @@ local lp = Players.LocalPlayer
 local protection = {
     enabled = true,
     interceptCount = 0,
-    localScriptKickCount = 0,  -- 本地脚本踢出计数
-    remoteKickCount = 0,        -- 远程事件踢出计数
+    localScriptKickCount = 0,
+    remoteKickCount = 0,
     startTime = os.clock()
 }
 
 -- ==============================================
--- 🛡️ 第一层：拦截 LocalPlayer:Kick
+-- 🛡️ 防踢核心（精简版）
 -- ==============================================
 local originalKick = lp.Kick
 lp.Kick = function(self, reason, ...)
     if protection.enabled then
         protection.interceptCount += 1
         protection.localScriptKickCount += 1
-        
-        local kickReason = tostring(reason or "未知原因")
-        addConsoleLog("[本地脚本拦截] 阻止踢出: " .. kickReason, "WARN")
-        
-        -- 可选：显示通知
-        pcall(function()
-            Rayfield:Notify({
-                Title = "防踢系统",
-                Content = "已拦截本地脚本踢出尝试",
-                Duration = 3,
-                Image = "shield"
-            })
-        end)
-        
-        return nil  -- 阻止踢出
+        print("[防踢] 拦截踢出: " .. tostring(reason))
+        return nil
     end
     return originalKick(self, reason, ...)
 end
 
--- ==============================================
--- 🛡️ 第二层：拦截 Player:Destroy
--- ==============================================
-local originalDestroy = lp.Destroy
-lp.Destroy = function(self, ...)
-    if protection.enabled then
-        protection.interceptCount += 1
-        protection.localScriptKickCount += 1
-        addConsoleLog("[本地脚本拦截] 阻止销毁玩家对象", "WARN")
-        return nil
-    end
-    return originalDestroy(self, ...)
-end
-
--- ==============================================
--- 🛡️ 第三层：拦截 Player:Remove
--- ==============================================
-local originalRemove = lp.Remove
-lp.Remove = function(self, ...)
-    if protection.enabled then
-        protection.interceptCount += 1
-        protection.localScriptKickCount += 1
-        addConsoleLog("[本地脚本拦截] 阻止移除玩家", "WARN")
-        return nil
-    end
-    return originalRemove(self, ...)
-end
-
--- ==============================================
--- 🛡️ 第四层：监控并拦截所有 RemoteEvent 踢出
--- ==============================================
-local blockedRemoteNames = {
-    "Kick", "kick", "KICK",
-    "Ban", "ban", "BAN",
-    "Punish", "punish",
-    "Remove", "remove",
-    "Destroy", "destroy"
-}
-
--- 扫描并拦截远程事件
-local function hookRemoteEvent(remote)
-    if not remote:IsA("RemoteEvent") then return end
-    
-    local remoteName = remote.Name
-    local shouldBlock = false
-    
-    for _, blockedName in ipairs(blockedRemoteNames) do
-        if string.find(string.lower(remoteName), string.lower(blockedName)) then
-            shouldBlock = true
-            break
-        end
-    end
-    
-    if shouldBlock then
-        local originalFireServer = remote.FireServer
-        remote.FireServer = function(self, ...)
-            if protection.enabled then
-                protection.interceptCount += 1
-                protection.remoteKickCount += 1
-                addConsoleLog("[远程事件拦截] 阻止可疑远程调用: " .. remoteName, "WARN")
-                return nil
-            end
-            return originalFireServer(self, ...)
-        end
-    end
-end
-
--- 扫描所有现有的远程事件
-local function scanForRemotes()
-    for _, obj in ipairs(ReplicatedStorage:GetDescendants()) do
-        pcall(function() hookRemoteEvent(obj) end)
-    end
-    
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        pcall(function() hookRemoteEvent(obj) end)
-    end
-end
-
--- 监听新添加的远程事件
-ReplicatedStorage.DescendantAdded:Connect(function(child)
-    pcall(function() hookRemoteEvent(child) end)
-end)
-
-workspace.DescendantAdded:Connect(function(child)
-    pcall(function() hookRemoteEvent(child) end)
-end)
-
--- ==============================================
--- 🛡️ 第五层：监控 OnKick 事件（如果有）
--- ==============================================
-pcall(function()
-    local onKickEvent = lp:FindFirstChild("OnKick") or lp:FindFirstChild("KickEvent")
-    if onKickEvent and onKickEvent:IsA("RemoteEvent") then
-        local originalFire = onKickEvent.FireClient
-        onKickEvent.FireClient = function(...)
-            if protection.enabled then
-                protection.interceptCount += 1
-                addConsoleLog("[事件拦截] 阻止 OnKick 事件", "WARN")
-                return nil
-            end
-            return originalFire(...)
-        end
-    end
-end)
-
--- ==============================================
--- 🛡️ 第六层：防止通过修改 Parent 踢出
--- ==============================================
-local originalParent = lp.Parent
-lp:GetPropertyChangedSignal("Parent"):Connect(function()
-    if protection.enabled and lp.Parent ~= originalParent and lp.Parent ~= Players then
-        addConsoleLog("[属性保护] 阻止修改玩家父级对象", "WARN")
-        pcall(function() lp.Parent = Players end)
-        protection.interceptCount += 1
-    end
-end)
-
--- ==============================================
--- 🛡️ 第七层：心跳保持（防止挂机踢出）
--- ==============================================
+-- 心跳保持
 task.spawn(function()
     while task.wait(5) do
         if protection.enabled and lp.Character then
             pcall(function()
                 local humanoid = lp.Character:FindFirstChild("Humanoid")
                 if humanoid then
-                    -- 微小的移动保持活跃
                     humanoid:Move(Vector3.new(0, 0, 0), true)
                 end
             end)
@@ -178,28 +47,337 @@ task.spawn(function()
 end)
 
 -- ==============================================
--- 🛡️ 第八层：网络连接保护
+-- 📱 多重备用 UI 加载方案
 -- ==============================================
--- 防止通过断开连接踢出
-local networkProtection = Instance.new("BindableEvent")
-networkProtection.Event:Connect(function()
-    -- 保持网络活动
-end)
+local Rayfield = nil
+local loadSuccess = false
 
-task.spawn(function()
-    while task.wait(1) do
-        if protection.enabled then
-            pcall(function()
-                networkProtection:Fire()
-            end)
+-- 备用链接列表（按优先级排序）
+local uiSources = {
+    {
+        name = "官方源",
+        url = "https://raw.githubusercontent.com/SiriusSoftwareLtd/Rayfield/main/source.lua"
+    },
+    {
+        name = "镜像源1",
+        url = "https://raw.githubusercontent.com/shlexware/Rayfield/main/source.lua"
+    },
+    {
+        name = "镜像源2", 
+        url = "https://raw.githubusercontent.com/Exunys/Rayfield/main/source.lua"
+    }
+}
+
+-- 尝试加载 UI
+print("🔍 开始加载 UI 库...")
+
+for _, source in ipairs(uiSources) do
+    if loadSuccess then break end
+    
+    local success, result = pcall(function()
+        print("📡 尝试连接: " .. source.name)
+        return game:HttpGet(source.url)
+    end)
+    
+    if success and result then
+        local loadSuccess2, loadedLib = pcall(function()
+            return loadstring(result)()
+        end)
+        
+        if loadSuccess2 and loadedLib then
+            Rayfield = loadedLib
+            loadSuccess = true
+            print("✅ UI 库加载成功，使用源: " .. source.name)
+        else
+            print("❌ 解析失败: " .. source.name)
         end
+    else
+        print("❌ 连接失败: " .. source.name)
     end
-end)
+    
+    task.wait(0.5)
+end
 
 -- ==============================================
--- 📱 加载 Rayfield UI 库
+-- 🎨 如果所有外部库都失败，使用内置简易 UI
 -- ==============================================
-local Rayfield = loadstring(game:HttpGet('https://raw.githubusercontent.com/SiriusSoftwareLtd/Rayfield/main/source.lua'))()
+if not loadSuccess or not Rayfield then
+    print("⚠️ 外部 UI 库加载失败，使用内置简易界面")
+    
+    -- 创建简易 GUI
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "AntiKickSimple"
+    gui.Parent = lp:WaitForChild("PlayerGui")
+    gui.ResetOnSpawn = false
+    
+    -- 主窗口
+    local main = Instance.new("Frame")
+    main.Size = UDim2.new(0, 300, 0, 350)
+    main.Position = UDim2.new(0.5, -150, 0.5, -175)
+    main.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+    main.BorderSizePixel = 0
+    main.Active = true
+    main.Parent = gui
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = main
+    
+    -- 顶部栏
+    local topBar = Instance.new("Frame")
+    topBar.Size = UDim2.new(1, 0, 0, 35)
+    topBar.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+    topBar.BorderSizePixel = 0
+    topBar.Active = true
+    topBar.Parent = main
+    
+    local topCorner = Instance.new("UICorner")
+    topCorner.CornerRadius = UDim.new(0, 8)
+    topCorner.Parent = topBar
+    
+    -- 标题
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, -50, 1, 0)
+    title.Position = UDim2.new(0, 15, 0, 0)
+    title.BackgroundTransparency = 1
+    title.Text = "🛡️ 防踢系统 v2.0"
+    title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 14
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.Parent = topBar
+    
+    -- 关闭按钮
+    local closeBtn = Instance.new("TextButton")
+    closeBtn.Size = UDim2.new(0, 30, 0, 24)
+    closeBtn.Position = UDim2.new(1, -35, 0, 5)
+    closeBtn.BackgroundColor3 = Color3.fromRGB(220, 60, 60)
+    closeBtn.Text = "✕"
+    closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    closeBtn.Font = Enum.Font.GothamBold
+    closeBtn.TextSize = 14
+    closeBtn.BorderSizePixel = 0
+    closeBtn.AutoButtonColor = true
+    closeBtn.Parent = topBar
+    
+    local closeCorner = Instance.new("UICorner")
+    closeCorner.CornerRadius = UDim.new(0, 4)
+    closeCorner.Parent = closeBtn
+    
+    -- 状态区域
+    local statusFrame = Instance.new("Frame")
+    statusFrame.Size = UDim2.new(1, -20, 0, 40)
+    statusFrame.Position = UDim2.new(0, 10, 0, 45)
+    statusFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+    statusFrame.BorderSizePixel = 0
+    statusFrame.Parent = main
+    
+    local statusCorner = Instance.new("UICorner")
+    statusCorner.CornerRadius = UDim.new(0, 6)
+    statusCorner.Parent = statusFrame
+    
+    -- 状态指示器
+    local statusDot = Instance.new("Frame")
+    statusDot.Size = UDim2.new(0, 12, 0, 12)
+    statusDot.Position = UDim2.new(0, 10, 0.5, -6)
+    statusDot.BackgroundColor3 = Color3.fromRGB(0, 255, 100)
+    statusDot.BorderSizePixel = 0
+    statusDot.Parent = statusFrame
+    
+    local dotCorner = Instance.new("UICorner")
+    dotCorner.CornerRadius = UDim.new(1, 0)
+    dotCorner.Parent = statusDot
+    
+    local statusText = Instance.new("TextLabel")
+    statusText.Size = UDim2.new(1, -30, 1, 0)
+    statusText.Position = UDim2.new(0, 30, 0, 0)
+    statusText.BackgroundTransparency = 1
+    statusText.Text = "保护状态: 运行中"
+    statusText.TextColor3 = Color3.fromRGB(200, 200, 200)
+    statusText.Font = Enum.Font.Gotham
+    statusText.TextSize = 12
+    statusText.TextXAlignment = Enum.TextXAlignment.Left
+    statusText.Parent = statusFrame
+    
+    -- 日志区域
+    local logFrame = Instance.new("Frame")
+    logFrame.Size = UDim2.new(1, -20, 1, -140)
+    logFrame.Position = UDim2.new(0, 10, 0, 95)
+    logFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 28)
+    logFrame.BorderSizePixel = 0
+    logFrame.Parent = main
+    
+    local logCorner = Instance.new("UICorner")
+    logCorner.CornerRadius = UDim.new(0, 6)
+    logCorner.Parent = logFrame
+    
+    -- 日志标题
+    local logTitle = Instance.new("TextLabel")
+    logTitle.Size = UDim2.new(1, 0, 0, 25)
+    logTitle.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    logTitle.Text = "📋 系统日志"
+    logTitle.TextColor3 = Color3.fromRGB(180, 180, 180)
+    logTitle.Font = Enum.Font.GothamBold
+    logTitle.TextSize = 11
+    logTitle.BorderSizePixel = 0
+    logTitle.Parent = logFrame
+    
+    -- 日志滚动区域
+    local logScroll = Instance.new("ScrollingFrame")
+    logScroll.Size = UDim2.new(1, -10, 1, -35)
+    logScroll.Position = UDim2.new(0, 5, 0, 30)
+    logScroll.BackgroundTransparency = 1
+    logScroll.BorderSizePixel = 0
+    logScroll.ScrollBarThickness = 5
+    logScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+    logScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    logScroll.Parent = logFrame
+    
+    local logList = Instance.new("UIListLayout")
+    logList.Padding = UDim.new(0, 2)
+    logList.Parent = logScroll
+    
+    -- 统计信息
+    local statsFrame = Instance.new("Frame")
+    statsFrame.Size = UDim2.new(1, -20, 0, 35)
+    statsFrame.Position = UDim2.new(0, 10, 1, -45)
+    statsFrame.BackgroundTransparency = 1
+    statsFrame.Parent = main
+    
+    local interceptLabel = Instance.new("TextLabel")
+    interceptLabel.Size = UDim2.new(0.5, -5, 1, 0)
+    interceptLabel.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+    interceptLabel.Text = "拦截: 0"
+    interceptLabel.TextColor3 = Color3.fromRGB(255, 180, 0)
+    interceptLabel.Font = Enum.Font.GothamBold
+    interceptLabel.TextSize = 12
+    interceptLabel.BorderSizePixel = 0
+    interceptLabel.Parent = statsFrame
+    
+    local interceptCorner = Instance.new("UICorner")
+    interceptCorner.CornerRadius = UDim.new(0, 4)
+    interceptCorner.Parent = interceptLabel
+    
+    local uptimeLabel = Instance.new("TextLabel")
+    uptimeLabel.Size = UDim2.new(0.5, -5, 1, 0)
+    uptimeLabel.Position = UDim2.new(0.5, 5, 0, 0)
+    uptimeLabel.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+    uptimeLabel.Text = "0s"
+    uptimeLabel.TextColor3 = Color3.fromRGB(0, 200, 255)
+    uptimeLabel.Font = Enum.Font.Gotham
+    uptimeLabel.TextSize = 12
+    uptimeLabel.BorderSizePixel = 0
+    uptimeLabel.Parent = statsFrame
+    
+    local uptimeCorner = Instance.new("UICorner")
+    uptimeCorner.CornerRadius = UDim.new(0, 4)
+    uptimeCorner.Parent = uptimeLabel
+    
+    -- 日志函数
+    local logs = {}
+    function addLog(message, color)
+        color = color or Color3.fromRGB(200, 200, 200)
+        
+        local logLabel = Instance.new("TextLabel")
+        logLabel.Size = UDim2.new(1, -10, 0, 18)
+        logLabel.BackgroundTransparency = 1
+        logLabel.Text = "[" .. os.date("%H:%M:%S") .. "] " .. message
+        logLabel.TextColor3 = color
+        logLabel.Font = Enum.Font.Code
+        logLabel.TextSize = 11
+        logLabel.TextXAlignment = Enum.TextXAlignment.Left
+        logLabel.TextWrapped = true
+        logLabel.Parent = logScroll
+        
+        table.insert(logs, logLabel)
+        if #logs > 50 then
+            logs[1]:Destroy()
+            table.remove(logs, 1)
+        end
+        
+        task.wait()
+        logScroll.CanvasPosition = Vector2.new(0, logScroll.CanvasSize.Y.Offset)
+    end
+    
+    -- 拖动功能
+    local dragging = false
+    local dragStart, startPos
+    
+    topBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = input.Position
+            startPos = main.Position
+        end
+    end)
+    
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging then
+            local delta = input.Position - dragStart
+            main.Position = UDim2.new(
+                startPos.X.Scale,
+                startPos.X.Offset + delta.X,
+                startPos.Y.Scale,
+                startPos.Y.Offset + delta.Y
+            )
+        end
+    end)
+    
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+    
+    -- 关闭按钮
+    closeBtn.MouseButton1Click:Connect(function()
+        protection.enabled = false
+        lp.Kick = originalKick
+        gui:Destroy()
+    end)
+    
+    -- 更新 UI
+    task.spawn(function()
+        while task.wait(0.5) do
+            interceptLabel.Text = "拦截: " .. protection.interceptCount
+            
+            local uptime = math.floor(os.clock() - protection.startTime)
+            if uptime < 60 then
+                uptimeLabel.Text = uptime .. "s"
+            elseif uptime < 3600 then
+                uptimeLabel.Text = math.floor(uptime / 60) .. "m"
+            else
+                uptimeLabel.Text = math.floor(uptime / 3600) .. "h"
+            end
+            
+            statusDot.BackgroundColor3 = protection.enabled and Color3.fromRGB(0, 255, 100) or Color3.fromRGB(255, 100, 100)
+            statusText.Text = "保护状态: " .. (protection.enabled and "运行中" or "已停止")
+        end
+    end)
+    
+    -- 初始化日志
+    addLog("✅ 防踢系统已启动 (简易模式)", Color3.fromRGB(0, 255, 100))
+    addLog("⚠️ 外部 UI 库加载失败，使用内置界面", Color3.fromRGB(255, 200, 0))
+    addLog("👤 玩家: " .. lp.Name, Color3.fromRGB(100, 200, 255))
+    
+    -- 切换保护功能（点击状态栏）
+    statusFrame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            protection.enabled = not protection.enabled
+            local msg = protection.enabled and "保护已启用" or "保护已禁用"
+            local color = protection.enabled and Color3.fromRGB(0, 255, 100) or Color3.fromRGB(255, 100, 100)
+            addLog(msg, color)
+        end
+    end)
+    
+    print("✅ 简易 UI 加载完成")
+    return  -- 使用简易 UI 后退出，不继续执行 Rayfield 代码
+end
+
+-- ==============================================
+-- 🎯 如果 Rayfield 加载成功，使用完整版 UI
+-- ==============================================
+print("✅ 使用 Rayfield 完整版 UI")
 
 local Window = Rayfield:CreateWindow({
     Name = "🛡️ 全能防踢系统",
@@ -224,18 +402,14 @@ local Window = Rayfield:CreateWindow({
     KeySystem = false
 })
 
--- ==============================================
--- 📋 控制台标签页
--- ==============================================
+-- 控制台标签页
 local ConsoleTab = Window:CreateTab("📊 控制台", "terminal")
-local ConsoleSection = ConsoleTab:CreateSection("系统运行日志")
 
 local LogOutput = ConsoleTab:CreateParagraph({
     Title = "实时日志",
-    Content = "✅ 全能防踢系统已启动...\n🛡️ 本地脚本保护已激活..."
+    Content = "✅ 全能防踢系统已启动..."
 })
 
--- 日志函数
 function addConsoleLog(message, logType)
     logType = logType or "INFO"
     local timestamp = os.date("%H:%M:%S")
@@ -252,23 +426,21 @@ function addConsoleLog(message, logType)
         coloredMessage = "ℹ️ " .. message
     end
     
-    LogOutput:SetContent(prefix .. coloredMessage .. "\n" .. LogOutput.Content)
+    pcall(function()
+        LogOutput:SetContent(prefix .. coloredMessage .. "\n" .. LogOutput.Content)
+    end)
     print("[防踢系统] [" .. logType .. "] " .. message)
 end
 
--- ==============================================
--- 🛡️ 主控制标签页
--- ==============================================
+-- 主控制标签页
 local MainTab = Window:CreateTab("🛡️ 主控制", "settings")
-local MainSection = MainTab:CreateSection("保护状态")
 
--- 状态显示
 local StatusDisplay = MainTab:CreateParagraph({
     Title = "当前保护状态",
-    Content = "🟢 总体保护: 运行中\n🚫 总拦截次数: 0\n📝 本地脚本拦截: 0\n🌐 远程事件拦截: 0\n⏱️ 运行时间: 0s"
+    Content = "🟢 总体保护: 运行中\n🚫 总拦截次数: 0\n⏱️ 运行时间: 0s"
 })
 
--- 实时更新 UI
+-- 实时更新
 task.spawn(function()
     while task.wait(0.5) do
         local uptime = math.floor(os.clock() - protection.startTime)
@@ -280,183 +452,39 @@ task.spawn(function()
         local statusColor = protection.enabled and "🟢" or "🔴"
         local statusText = protection.enabled and "运行中" or "已停止"
         
-        StatusDisplay:SetContent(string.format(
-            "%s 总体保护: %s\n🚫 总拦截次数: %d\n📝 本地脚本拦截: %d\n🌐 远程事件拦截: %d\n⏱️ 运行时间: %s",
-            statusColor, statusText, 
-            protection.interceptCount,
-            protection.localScriptKickCount,
-            protection.remoteKickCount,
-            timeStr
-        ))
+        pcall(function()
+            StatusDisplay:SetContent(string.format(
+                "%s 总体保护: %s\n🚫 总拦截次数: %d\n⏱️ 运行时间: %s",
+                statusColor, statusText, protection.interceptCount, timeStr
+            ))
+        end)
     end
 end)
 
--- 开关按钮
-local ToggleButton = MainTab:CreateButton({
+-- 切换保护
+MainTab:CreateButton({
     Name = "🔄 切换保护状态",
     Callback = function()
         protection.enabled = not protection.enabled
         local msg = protection.enabled and "所有保护已重新启用" or "所有保护已手动关闭"
         local msgType = protection.enabled and "SUCCESS" or "WARN"
         addConsoleLog(msg, msgType)
-        
-        Rayfield:Notify({
-            Title = "防踢系统",
-            Content = msg,
-            Duration = 3,
-            Image = "shield"
-        })
     end,
 })
 
--- 测试本地脚本踢出
-local TestLocalButton = MainTab:CreateButton({
-    Name = "🧪 测试本地脚本踢出拦截",
+-- 测试拦截
+MainTab:CreateButton({
+    Name = "🧪 测试踢出拦截",
     Callback = function()
-        addConsoleLog("执行本地脚本踢出测试...", "INFO")
+        addConsoleLog("执行踢出测试...", "INFO")
         pcall(function() 
-            lp:Kick("这是一个本地脚本踢出测试")
+            lp:Kick("这是一个测试")
         end)
-        addConsoleLog("本地脚本踢出测试完成", "SUCCESS")
+        addConsoleLog("测试完成，当前拦截次数: " .. protection.interceptCount, "SUCCESS")
     end,
 })
 
--- 扫描远程事件按钮
-local ScanRemotesButton = MainTab:CreateButton({
-    Name = "🔍 重新扫描远程事件",
-    Callback = function()
-        addConsoleLog("开始扫描可疑远程事件...", "INFO")
-        scanForRemotes()
-        addConsoleLog("远程事件扫描完成", "SUCCESS")
-    end,
-})
-
--- 重置统计
-local ResetStatsButton = MainTab:CreateButton({
-    Name = "📊 重置统计数据",
-    Callback = function()
-        protection.interceptCount = 0
-        protection.localScriptKickCount = 0
-        protection.remoteKickCount = 0
-        protection.startTime = os.clock()
-        addConsoleLog("统计数据已重置", "INFO")
-    end,
-})
-
--- ==============================================
--- 📈 详细统计标签页
--- ==============================================
-local StatsTab = Window:CreateTab("📈 详细统计", "chart")
-local StatsSection = StatsTab:CreateSection("保护统计")
-
-local DetailedStats = StatsTab:CreateParagraph({
-    Title = "详细拦截记录",
-    Content = "等待拦截事件..."
-})
-
--- 拦截详情记录
-local interceptHistory = {}
-local MAX_HISTORY = 10
-
-function addInterceptHistory(eventType, details)
-    table.insert(interceptHistory, 1, {
-        Time = os.date("%H:%M:%S"),
-        Type = eventType,
-        Details = details
-    })
-    
-    if #interceptHistory > MAX_HISTORY then
-        table.remove(interceptHistory)
-    end
-    
-    -- 更新显示
-    local historyText = ""
-    for _, record in ipairs(interceptHistory) do
-        historyText = historyText .. string.format(
-            "[%s] %s: %s\n",
-            record.Time, record.Type, record.Details
-        )
-    end
-    
-    if historyText == "" then
-        historyText = "暂无拦截记录"
-    end
-    
-    DetailedStats:SetContent(historyText)
-end
-
--- 修改日志函数以记录历史
-local originalAddLog = addConsoleLog
-addConsoleLog = function(message, logType)
-    originalAddLog(message, logType)
-    if logType == "WARN" then
-        addInterceptHistory("拦截", message)
-    end
-end
-
--- ==============================================
--- 🚀 初始化
--- ==============================================
-addConsoleLog("全能防踢系统 v2.0 已启动", "SUCCESS")
-addConsoleLog("本地脚本保护层已激活", "SUCCESS")
-addConsoleLog("远程事件监控已启用", "SUCCESS")
+-- 初始化
+addConsoleLog("防踢系统 v2.0 已启动", "SUCCESS")
 addConsoleLog("当前玩家: " .. lp.Name, "INFO")
-
--- 初始扫描远程事件
-scanForRemotes()
-
--- 监控玩家事件
-Players.PlayerAdded:Connect(function(player)
-    addConsoleLog("👤 玩家加入: " .. player.Name, "INFO")
-end)
-
-Players.PlayerRemoving:Connect(function(player)
-    addConsoleLog("👋 玩家离开: " .. player.Name, "INFO")
-end)
-
--- 监控角色变化
-lp.CharacterAdded:Connect(function(character)
-    addConsoleLog("🎮 角色已生成", "INFO")
-    
-    -- 防止角色被删除
-    local humanoid = character:WaitForChild("Humanoid")
-    if humanoid then
-        local originalHealth = humanoid.Health
-        humanoid:GetPropertyChangedSignal("Health"):Connect(function()
-            if protection.enabled and humanoid.Health <= 0 then
-                addConsoleLog("[角色保护] 阻止角色死亡", "WARN")
-                pcall(function() 
-                    humanoid.Health = originalHealth 
-                end)
-            end
-        end)
-    end
-end)
-
--- 清理函数
-Window:SetCloseCallback(function()
-    protection.enabled = false
-    lp.Kick = originalKick
-    lp.Destroy = originalDestroy
-    lp.Remove = originalRemove
-    addConsoleLog("系统已关闭，保护已禁用", "WARN")
-end)
-
--- 防作弊检测规避
-task.spawn(function()
-    while task.wait(30) do
-        if protection.enabled then
-            pcall(function()
-                -- 发送心跳包
-                local heartbeat = Instance.new("RemoteEvent")
-                heartbeat.Name = "Heartbeat_" .. HttpService:GenerateGUID(false)
-                heartbeat.Parent = ReplicatedStorage
-                task.wait(0.1)
-                heartbeat:Destroy()
-            end)
-        end
-    end
-end)
-
-addConsoleLog("所有保护层已就绪", "SUCCESS")
 addConsoleLog("按 'RightShift' 呼出/隐藏界面", "INFO")
