@@ -1,0 +1,210 @@
+-- 最终修复：Dex++ 式 1px 级增长，不会一下撑满
+local Players = game:GetService("Players")
+local LogService = game:GetService("LogService")
+local UserInputService = game:GetService("UserInputService")
+local lp = Players.LocalPlayer
+
+local antiKickEnabled = false
+local kickCount = 0
+local originalKick = lp.Kick
+local autoScroll = false
+local currentCanvasHeight = 0 -- 手动控制高度，不依赖List
+
+-- 创建GUI
+local gui = Instance.new("ScreenGui")
+gui.Name = "Console"
+gui.ResetOnSpawn = false
+gui.Parent = lp.PlayerGui
+
+-- 主窗口
+local main = Instance.new("Frame")
+main.Size = UDim2.new(0, 350, 0, 320)
+main.Position = UDim2.new(0.05, 0, 0.05, 0)
+main.BackgroundColor3 = Color3.new(0.08, 0.08, 0.1)
+main.ClipsDescendants = true
+main.Parent = gui
+
+-- 标题栏
+local titleBar = Instance.new("Frame")
+titleBar.Size = UDim2.new(1, 0, 0, 25)
+titleBar.BackgroundColor3 = Color3.new(0.15, 0.15, 0.2)
+titleBar.Parent = main
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, -80, 1, 0)
+title.Position = UDim2.new(0, 5, 0, 0)
+title.BackgroundTransparency = 1
+title.Text = "控制台"
+title.TextColor3 = Color3.new(0.8, 0.9, 1)
+title.Font = Enum.Font.Code
+title.TextSize = 14
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.Parent = titleBar
+
+-- 关闭按钮
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 30, 0, 22)
+closeBtn.Position = UDim2.new(1, -35, 0, 1)
+closeBtn.BackgroundColor3 = Color3.new(0.3, 0.1, 0.1)
+closeBtn.Text = "×"
+closeBtn.TextColor3 = Color3.new(1,1,1)
+closeBtn.Font = Enum.Font.Code
+closeBtn.TextSize = 16
+closeBtn.Parent = titleBar
+
+-- 隐藏按钮
+local hideBtn = Instance.new("TextButton")
+hideBtn.Size = UDim2.new(0, 50, 0, 22)
+hideBtn.Position = UDim2.new(1, -90, 0, 1)
+hideBtn.BackgroundColor3 = Color3.new(0.18, 0.2, 0.28)
+hideBtn.Text = "隐藏"
+hideBtn.TextColor3 = Color3.new(1,1,1)
+hideBtn.Font = Enum.Font.Code
+hideBtn.TextSize = 12
+hideBtn.Parent = titleBar
+
+-- 日志区（核心：手动控制高度）
+local logFrame = Instance.new("ScrollingFrame")
+logFrame.Size = UDim2.new(1, -4, 1, -60)
+logFrame.Position = UDim2.new(0, 2, 0, 26)
+logFrame.BackgroundTransparency = 1
+logFrame.ScrollBarThickness = 4
+logFrame.CanvasSize = UDim2.new(0, 0, 0, 0) -- 初始高度0
+logFrame.Parent = main
+
+-- 底部按钮栏
+local bottomBar = Instance.new("Frame")
+bottomBar.Size = UDim2.new(1, 0, 0, 30)
+bottomBar.Position = UDim2.new(0, 0, 1, -30)
+bottomBar.BackgroundColor3 = Color3.new(0.12, 0.12, 0.18)
+bottomBar.Parent = main
+
+-- 自动滚动按钮
+local autoBtn = Instance.new("TextButton")
+autoBtn.Size = UDim2.new(0.5, -2, 0, 26)
+autoBtn.Position = UDim2.new(0, 1, 0, 2)
+autoBtn.BackgroundColor3 = Color3.new(0.18, 0.22, 0.25)
+autoBtn.Text = "自动: 关"
+autoBtn.TextColor3 = Color3.new(1,1,1)
+autoBtn.Font = Enum.Font.Code
+autoBtn.TextSize = 12
+autoBtn.Parent = bottomBar
+
+-- 防踢按钮
+local akBtn = Instance.new("TextButton")
+akBtn.Size = UDim2.new(0.5, -2, 0, 26)
+akBtn.Position = UDim2.new(0.5, 1, 0, 2)
+akBtn.BackgroundColor3 = Color3.new(0.25, 0.18, 0.18)
+akBtn.Text = "防踢: 关"
+akBtn.TextColor3 = Color3.new(1,1,1)
+akBtn.Font = Enum.Font.Code
+akBtn.TextSize = 12
+akBtn.Parent = bottomBar
+
+-- 窗口拖动
+local dragging = false
+titleBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        _G.dragStart = input.Position
+        _G.startPos = main.Position
+    end
+end)
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - _G.dragStart
+        main.Position = UDim2.new(_G.startPos.X.Scale, _G.startPos.X.Offset + delta.X, _G.startPos.Y.Scale, _G.startPos.Y.Offset + delta.Y)
+    end
+end)
+UserInputService.InputEnded:Connect(function(input)
+    dragging = false
+end)
+
+-- 悬浮打开按钮
+local floatOpen = Instance.new("TextButton")
+floatOpen.Size = UDim2.new(0, 80, 0, 30)
+floatOpen.Position = UDim2.new(0.05, 0, 0.85, 0)
+floatOpen.BackgroundColor3 = Color3.new(0.15, 0.3, 0.5)
+floatOpen.Text = "打开控制台"
+floatOpen.Font = Enum.Font.Code
+floatOpen.TextSize = 12
+floatOpen.Visible = false
+floatOpen.Parent = gui
+
+-- 日志输出函数（核心：每次只增加固定高度）
+local function addLog(text, color)
+    -- 手动增加高度（和Dex一样，14px一行）
+    local lineHeight = 14
+    currentCanvasHeight += lineHeight
+    logFrame.CanvasSize = UDim2.new(0, 0, currentCanvasHeight, 0)
+
+    -- 创建文本
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 0, lineHeight)
+    label.BackgroundTransparency = 1
+    label.Text = "["..os.date("%H:%M:%S").."] "..text
+    label.TextColor3 = color or Color3.new(0.9, 0.9, 0.9)
+    label.Font = Enum.Font.Code
+    label.TextSize = 11
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = logFrame
+
+    -- 只有开了自动才会滚动
+    if autoScroll then
+        task.defer(function()
+            logFrame.CanvasPosition = Vector2.new(0, currentCanvasHeight)
+        end)
+    end
+end
+
+-- 监听游戏输出
+LogService.MessageOut:Connect(function(msg, msgType)
+    local color = Color3.new(0.9, 0.9, 0.9)
+    if msgType == Enum.MessageType.MessageWarning then
+        color = Color3.new(1, 0.8, 0.2)
+    elseif msgType == Enum.MessageType.MessageError then
+        color = Color3.new(1, 0.3, 0.3)
+    elseif msgType == Enum.MessageType.MessageInfo then
+        color = Color3.new(0.2, 0.8, 1)
+    end
+    addLog(msg, color)
+end)
+
+-- 自动滚动开关
+autoBtn.MouseButton1Click:Connect(function()
+    autoScroll = not autoScroll
+    autoBtn.Text = autoScroll and "自动: 开" or "自动: 关"
+end)
+
+-- 防踢开关
+akBtn.MouseButton1Click:Connect(function()
+    antiKickEnabled = not antiKickEnabled
+    akBtn.Text = antiKickEnabled and "防踢: 开" or "防踢: 关"
+    if antiKickEnabled then
+        lp.Kick = function(...)
+            kickCount += 1
+            addLog("[防踢] 已拦截踢出（"..kickCount.."）", Color3.new(1, 0.5, 0.1))
+            return task.wait(math.huge)
+        end
+    else
+        lp.Kick = originalKick
+    end
+end)
+
+-- 隐藏/显示
+hideBtn.MouseButton1Click:Connect(function()
+    main.Visible = false
+    floatOpen.Visible = true
+end)
+floatOpen.MouseButton1Click:Connect(function()
+    main.Visible = true
+    floatOpen.Visible = false
+end)
+
+-- 关闭GUI
+closeBtn.MouseButton1Click:Connect(function()
+    gui:Destroy()
+end)
+
+-- 初始化提示
+addLog("控制台已加载", Color3.new(0.3, 1, 0.7))
