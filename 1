@@ -1,94 +1,104 @@
--- 完整日志记录 + 防踢（包含蓝色日志）
+-- 最终版 · 可正常滑动滚动条 · 控制台+防踢+日志记录
 local Players = game:GetService("Players")
 local StarterGui = game:GetService("StarterGui")
 local LogService = game:GetService("LogService")
+local UserInputService = game:GetService("UserInputService")
 local lp = Players.LocalPlayer
 
 local AntiKickActive = false
 local KickAttempts = 0
-local oldKick, AncestryConn
-local UI = {}
+local oldKick, ancestryConn
 
-local function CreateConsole()
-    local ScreenGui = Instance.new("ScreenGui")
-    ScreenGui.Name = "FullLogConsole"
-    ScreenGui.ResetOnSpawn = false
-    ScreenGui.Parent = lp.PlayerGui
+-- 创建控制台
+local sg = Instance.new("ScreenGui")
+sg.Name = "Console"
+sg.ResetOnSpawn = false
+sg.Parent = lp.PlayerGui
 
-    local ConsoleFrame = Instance.new("Frame")
-    ConsoleFrame.Size = UDim2.new(0, 360, 0, 270)
-    ConsoleFrame.Position = UDim2.new(0.02, 0, 0.02, 0)
-    ConsoleFrame.BackgroundColor3 = Color3.new(0.05,0.05,0.08)
-    ConsoleFrame.BorderColor3 = Color3.new(0,0.8,0.3)
-    ConsoleFrame.BorderSizePixel = 2
-    ConsoleFrame.Parent = ScreenGui
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 340, 0, 260)
+frame.Position = UDim2.new(0.02, 0, 0.02, 0)
+frame.BackgroundColor3 = Color3.new(0.07,0.07,0.1)
+frame.BorderColor3 = Color3.new(0, 0.7, 1)
+frame.BorderSizePixel = 2
+frame.Parent = sg
 
-    local Title = Instance.new("TextLabel")
-    Title.Size = UDim2.new(1,0,0,25)
-    Title.BackgroundColor3 = Color3.new(0,0.8,0.3)
-    Title.Text = "Full Log Recorder & AntiKick"
-    Title.TextColor3 = Color3.new(0,0,0)
-    Title.Font = Enum.Font.Code
-    Title.TextSize = 14
-    Title.Parent = ConsoleFrame
+-- 标题
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1,0,0,24)
+title.BackgroundColor3 = Color3.new(0, 0.7, 1)
+title.Text = "LOG CONSOLE | ANTI KICK"
+title.TextColor3 = Color3.new(0,0,0)
+title.Font = Enum.Font.Code
+title.TextSize = 14
+title.Parent = frame
 
-    local LogFrame = Instance.new("ScrollingFrame")
-    LogFrame.Size = UDim2.new(1,-10,0.78,-30)
-    LogFrame.Position = UDim2.new(0,5,0,30)
-    LogFrame.BackgroundTransparency = 1
-    LogFrame.ScrollBarThickness = 6
-    LogFrame.Parent = ConsoleFrame
+-- 日志区域（重点：滚动正常）
+local logArea = Instance.new("ScrollingFrame")
+logArea.Size = UDim2.new(1,-10,0.76,-24)
+logArea.Position = UDim2.new(0,5,0,24)
+logArea.BackgroundTransparency = 1
+logArea.ScrollBarThickness = 6
+logArea.ScrollingEnabled = true
+logArea.VerticalScrollBarInset = Enum.ScrollBarInset.ScrollBar
+logArea.Parent = frame
 
-    local LogList = Instance.new("UIListLayout")
-    LogList.Parent = LogFrame
-    LogList.SortOrder = Enum.SortOrder.LayoutOrder
-    LogList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-        LogFrame.CanvasSize = UDim2.new(0,0,LogList.AbsoluteContentSize.Y,0)
-        LogFrame.CanvasPosition = Vector2.new(0, 9e9)
-    end)
+local list = Instance.new("UIListLayout")
+list.Parent = logArea
+list.SortOrder = Enum.SortOrder.LayoutOrder
+list.Padding = UDim.new(0, 2)
 
-    local Status = Instance.new("TextLabel")
-    Status.Size = UDim2.new(0.7,0,0.1,0)
-    Status.Position = UDim2.new(0,5,0.85,0)
-    Status.BackgroundTransparency = 1
-    Status.Text = "STATUS: OFFLINE"
-    Status.TextColor3 = Color3.new(1,0.3,0.3)
-    Status.Font = Enum.Font.Code
-    Status.TextSize = 12
-    Status.Parent = ConsoleFrame
+-- 自动滚动到底部
+list:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    logArea.CanvasSize = UDim2.new(0,0, list.AbsoluteContentSize.Y + 20, 0)
+    logArea.CanvasPosition = Vector2.new(0, logArea.AbsoluteCanvasSize.Y + 100)
+end)
 
-    local Btn = Instance.new("TextButton")
-    Btn.Size = UDim2.new(0.25,0,0.1,0)
-    Btn.Position = UDim2.new(0.7,0,0.85,0)
-    Btn.BackgroundColor3 = Color3.new(0.3,0.3,0.3)
-    Btn.BorderColor3 = Color3.new(0,0.8,0.3)
-    Btn.Text = "START"
-    Btn.TextColor3 = Color3.new(1,1,1)
-    Btn.Font = Enum.Font.Code
-    Btn.TextSize = 12
-    Btn.Parent = ConsoleFrame
+-- 状态
+local status = Instance.new("TextLabel")
+status.Size = UDim2.new(0.7,0,0.12,0)
+status.Position = UDim2.new(0,5,0.8,0)
+status.BackgroundTransparency = 1
+status.Text = "ANTIKICK: OFF"
+status.TextColor3 = Color3.new(1,0.2,0.2)
+status.Font = Enum.Font.Code
+status.TextSize = 13
+status.Parent = frame
 
-    -- 拖拽
-    local drag, start, pos
-    ConsoleFrame.InputBegan:Connect(function(i)
-        if i.UserInputType == Enum.UserInputType.MouseButton1 then
-            drag = true start = i.Position pos = ConsoleFrame.Position
-        end
-    end)
-    ConsoleFrame.InputChanged:Connect(function(i)
-        if drag then
-            local d = i.Position - start
-            ConsoleFrame.Position = UDim2.new(pos.X.Scale, pos.X.Offset+d.X, pos.Y.Scale, pos.Y.Offset+d.Y)
-        end
-    end)
-    ConsoleFrame.InputEnded:Connect(function(i)
-        if i.UserInputType == Enum.UserInputType.MouseButton1 then drag = false end
-    end)
+-- 按钮
+local btn = Instance.new("TextButton")
+btn.Size = UDim2.new(0.25,0,0.12,0)
+btn.Position = UDim2.new(0.7,0,0.8,0)
+btn.BackgroundColor3 = Color3.new(0.2,0.3,0.4)
+btn.Text = "START"
+btn.TextColor3 = Color3.new(1,1,1)
+btn.Font = Enum.Font.Code
+btn.TextSize = 13
+btn.Parent = frame
 
-    UI = {LogFrame=LogFrame, Status=Status, Btn=Btn}
-end
+-- 窗口拖动
+local drag, dragStart, framePos
+frame.InputBegan:Connect(function(i)
+    if i.UserInputType == Enum.UserInputType.MouseButton1 then
+        drag = true
+        dragStart = i.Position
+        framePos = frame.Position
+    end
+end)
+frame.InputChanged:Connect(function(i)
+    if drag and i.UserInputType == Enum.UserInputType.MouseMovement then
+        local delta = i.Position - dragStart
+        frame.Position = UDim2.new(framePos.X.Scale, framePos.X.Offset + delta.X, framePos.Y.Scale, framePos.Y.Offset + delta.Y)
+    end
+end)
+frame.InputEnded:Connect(function(i)
+    if i.UserInputType == Enum.UserInputType.MouseButton1 then
+        drag = false
+    end
+end)
 
-local function AddLog(msg, color)
+-- 日志输出函数
+local function addLog(msg, color)
     local l = Instance.new("TextLabel")
     l.Size = UDim2.new(1,0,0,14)
     l.BackgroundTransparency = 1
@@ -96,70 +106,60 @@ local function AddLog(msg, color)
     l.TextColor3 = color or Color3.new(1,1,1)
     l.Font = Enum.Font.Code
     l.TextSize = 10
-    l.Parent = UI.LogFrame
+    l.Parent = logArea
 end
 
--- 监听所有日志（包括蓝色）
-local function StartLog()
-    LogService.MessageOut:Connect(function(msg, typ)
-        if typ == Enum.MessageType.MessageError then
-            AddLog("[ERROR] "..msg, Color3.new(1,0,0))
-        elseif typ == Enum.MessageType.MessageWarning then
-            AddLog("[WARN] "..msg, Color3.new(1,1,0))
-        elseif typ == Enum.MessageType.MessageInfo then
-            AddLog("[INFO] "..msg, Color3.new(0,1,1)) -- 蓝色
-        elseif typ == Enum.MessageType.MessageOutput then
-            AddLog("[PRINT] "..msg, Color3.new(0.4,0.8,1)) -- 亮蓝
-        end
-    end)
-    AddLog("Log recorder started (all colors)", Color3.new(0,1,0))
-end
+-- 记录所有控制台（包括蓝色）
+LogService.MessageOut:Connect(function(msg, t)
+    if t == Enum.MessageType.MessageError then
+        addLog("[ERROR] "..msg, Color3.new(1,0,0))
+    elseif t == Enum.MessageType.MessageWarning then
+        addLog("[WARN] "..msg, Color3.new(1,1,0))
+    elseif t == Enum.MessageType.MessageInfo then
+        addLog("[INFO] "..msg, Color3.new(0,1,1))
+    elseif t == Enum.MessageType.MessageOutput then
+        addLog("[PRINT] "..msg, Color3.new(0.4,0.8,1))
+    end
+end)
 
-local function EnableAntiKick()
-    if AntiKickActive then return end
+-- 防踢功能
+local function enable()
     AntiKickActive = true
-
     pcall(function()
         oldKick = lp.Kick
         lp.Kick = function(...)
             KickAttempts += 1
-            AddLog("[ANTIKICK] Blocked kick #"..KickAttempts, Color3.new(1,0.5,0))
-            StarterGui:SetCore("SendNotification",{
-                Title="Kick Blocked", Text="Attempt "..KickAttempts, Duration=2
-            })
-            return task.wait(math.huge)
+            addLog("[BLOCKED] Kick attempt #"..KickAttempts, Color3.new(1, 0.5, 0))
+            return task.wait(9e9)
         end
     end)
 
-    AncestryConn = lp.AncestryChanged:Connect(function(_,p)
+    ancestryConn = lp.AncestryChanged:Connect(function(_, p)
         if p ~= Players then lp.Parent = Players end
     end)
 
-    UI.Status.Text = "STATUS: ONLINE | BLOCKED: "..KickAttempts
-    UI.Status.TextColor3 = Color3.new(0,1,0)
-    UI.Btn.Text = "STOP"
-    UI.Btn.BackgroundColor3 = Color3.new(1,0.2,0.2)
-    AddLog("AntiKick enabled", Color3.new(0,1,0))
+    status.Text = "ANTIKICK: ON | BLOCKED: "..KickAttempts
+    status.TextColor3 = Color3.new(0,1,0.4)
+    btn.Text = "STOP"
+    btn.BackgroundColor3 = Color3.new(0.6,0,0)
+    addLog("AntiKick enabled", Color3.new(0,1,0.4))
 end
 
-local function DisableAntiKick()
-    if not AntiKickActive then return end
+local function disable()
     AntiKickActive = false
-
     pcall(function() if oldKick then lp.Kick = oldKick end end)
-    if AncestryConn then AncestryConn:Disconnect() end
+    if ancestryConn then ancestryConn:Disconnect() end
 
-    UI.Status.Text = "STATUS: OFFLINE | BLOCKED: "..KickAttempts
-    UI.Status.TextColor3 = Color3.new(1,0.3,0.3)
-    UI.Btn.Text = "START"
-    UI.Btn.BackgroundColor3 = Color3.new(0.3,0.3,0.3)
-    AddLog("AntiKick disabled", Color3.new(1,0.3,0.3))
+    status.Text = "ANTIKICK: OFF | BLOCKED: "..KickAttempts
+    status.TextColor3 = Color3.new(1,0.2,0.2)
+    btn.Text = "START"
+    btn.BackgroundColor3 = Color3.new(0.2,0.3,0.4)
+    addLog("AntiKick disabled", Color3.new(1,0.2,0.2))
 end
 
-CreateConsole()
-StartLog()
-AddLog("UI loaded. Press START to enable anti-kick.", Color3.new(0.8,0.8,0.8))
-
-UI.Btn.MouseButton1Click:Connect(function()
-    if AntiKickActive then DisableAntiKick() else EnableAntiKick() end
+btn.MouseButton1Click:Connect(function()
+    if AntiKickActive then disable() else enable() end
 end)
+
+addLog("Console loaded & scrollable", Color3.new(0,1,1))
+addLog("You can drag the green bar now", Color3.new(0,1,1))
