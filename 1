@@ -1,4 +1,4 @@
--- 手机版 · 每条新日志单独一行 · 不跳不覆盖
+-- 手机版 · 隐藏后有小按钮可重新打开 · 每条日志新一行
 local Players = game:GetService("Players")
 local StarterGui = game:GetService("StarterGui")
 local LogService = game:GetService("LogService")
@@ -9,7 +9,7 @@ local KickAttempts = 0
 local oldKick, ancestryConn
 local ConsoleVisible = true
 
--- 创建界面
+-- 主界面
 local sg = Instance.new("ScreenGui")
 sg.Name = "Console"
 sg.ResetOnSpawn = false
@@ -47,9 +47,8 @@ list.Parent = logArea
 list.SortOrder = Enum.SortOrder.LayoutOrder
 list.Padding = UDim.new(0, 2)
 
--- 自动扩展高度，每条日志单独一行
 list:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-    logArea.CanvasSize = UDim2.new(0, 0, list.AbsoluteContentSize.Y + 20, 0)
+    logArea.CanvasSize = UDim2.new(0,0, list.AbsoluteContentSize.Y + 20, 0)
 end)
 
 -- 状态
@@ -63,7 +62,7 @@ status.Font = Enum.Font.Code
 status.TextSize = 13
 status.Parent = frame
 
--- 按钮1：防踢开关
+-- 防踢按钮
 local btnToggle = Instance.new("TextButton")
 btnToggle.Size = UDim2.new(0.42,0,0.14,0)
 btnToggle.Position = UDim2.new(0.05,0,0.8,0)
@@ -74,18 +73,29 @@ btnToggle.Font = Enum.Font.Code
 btnToggle.TextSize = 13
 btnToggle.Parent = frame
 
--- 按钮2：显示/隐藏界面
+-- 隐藏控制台按钮
 local btnShowHide = Instance.new("TextButton")
 btnShowHide.Size = UDim2.new(0.42,0,0.14,0)
 btnShowHide.Position = UDim2.new(0.53,0,0.8,0)
 btnShowHide.BackgroundColor3 = Color3.new(0.1,0.4,0.2)
 btnShowHide.Text = "HIDE"
 btnShowHide.TextColor3 = Color3.new(1,1,1)
-btnToggle.Font = Enum.Font.Code
 btnShowHide.TextSize = 13
 btnShowHide.Parent = frame
 
--- 窗口可拖动
+-- 悬浮小按钮（隐藏后用来打开）
+local floatBtn = Instance.new("TextButton")
+floatBtn.Size = UDim2.new(0, 70, 0, 40)
+floatBtn.Position = UDim2.new(0.02, 0, 0.85, 0)
+floatBtn.BackgroundColor3 = Color3.new(0, 0.7, 1)
+floatBtn.Text = "OPEN"
+floatBtn.TextColor3 = Color3.new(1,1,1)
+floatBtn.Font = Enum.Font.Code
+floatBtn.TextSize = 14
+floatBtn.Visible = false
+floatBtn.Parent = sg
+
+-- 拖动窗口
 local drag, dragStart, pos
 frame.InputBegan:Connect(function(i)
     if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
@@ -97,7 +107,7 @@ end)
 frame.InputChanged:Connect(function(i)
     if drag and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
         local delta = i.Position - dragStart
-        frame.Position = UDim2.new(pos.X.Scale, pos.X.Offset + delta.X, pos.Y.Scale, pos.Y.Offset + delta.Y)
+        frame.Position = UDim2.new(pos.X.Scale, pos.X.Offset+delta.X, pos.Y.Scale, pos.Y.Offset+delta.Y)
     end
 end)
 frame.InputEnded:Connect(function(i)
@@ -106,47 +116,58 @@ frame.InputEnded:Connect(function(i)
     end
 end)
 
--- 每条新日志 = 新建一行（你要的效果）
+-- 日志函数
 local function addLog(msg, color)
     local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, 0, 0, 14)
+    label.Size = UDim2.new(1,0,0,14)
     label.BackgroundTransparency = 1
-    label.Text = "[" .. os.date("%H:%M:%S") .. "] " .. msg
+    label.Text = "["..os.date("%H:%M:%S").."] "..msg
     label.TextColor3 = color or Color3.new(1,1,1)
     label.Font = Enum.Font.Code
     label.TextSize = 10
     label.Parent = logArea
 end
 
--- 显示/隐藏界面
+-- 显示 / 隐藏 + 悬浮按钮
 btnShowHide.MouseButton1Click:Connect(function()
     ConsoleVisible = not ConsoleVisible
     frame.Visible = ConsoleVisible
+    floatBtn.Visible = not ConsoleVisible  -- 隐藏控制台就显示小按钮
+    
     btnShowHide.Text = ConsoleVisible and "HIDE" or "SHOW"
     btnShowHide.BackgroundColor3 = ConsoleVisible and Color3.new(0.1,0.4,0.2) or Color3.new(0.4,0.1,0.1)
+end)
+
+-- 点小按钮重新打开
+floatBtn.MouseButton1Click:Connect(function()
+    ConsoleVisible = true
+    frame.Visible = true
+    floatBtn.Visible = false
+    btnShowHide.Text = "HIDE"
+    btnShowHide.BackgroundColor3 = Color3.new(0.1,0.4,0.2)
 end)
 
 -- 日志监听
 LogService.MessageOut:Connect(function(msg, t)
     if t == Enum.MessageType.MessageError then
-        addLog("[ERROR] " .. msg, Color3.new(1,0,0))
+        addLog("[ERROR] "..msg, Color3.new(1,0,0))
     elseif t == Enum.MessageType.MessageWarning then
-        addLog("[WARN] " .. msg, Color3.new(1,1,0))
+        addLog("[WARN] "..msg, Color3.new(1,1,0))
     elseif t == Enum.MessageType.MessageInfo then
-        addLog("[INFO] " .. msg, Color3.new(0,1,1))
+        addLog("[INFO] "..msg, Color3.new(0,1,1))
     elseif t == Enum.MessageType.MessageOutput then
-        addLog("[PRINT] " .. msg, Color3.new(0.4,0.8,1))
+        addLog("[PRINT] "..msg, Color3.new(0.4,0.8,1))
     end
 end)
 
--- 防踢功能
+-- 防踢
 local function enableAK()
     AntiKickActive = true
     pcall(function()
         oldKick = lp.Kick
         lp.Kick = function(...)
             KickAttempts += 1
-            addLog("[BLOCKED] Kick #" .. KickAttempts, Color3.new(1, 0.5, 0))
+            addLog("[BLOCKED] Kick #"..KickAttempts, Color3.new(1,0.5,0))
             return task.wait(9e9)
         end
     end)
@@ -155,7 +176,7 @@ local function enableAK()
         if p ~= Players then lp.Parent = Players end
     end)
 
-    status.Text = "ANTIKICK: ON | BLOCKED: " .. KickAttempts
+    status.Text = "ANTIKICK: ON | BLOCKED: "..KickAttempts
     status.TextColor3 = Color3.new(0,1,0.4)
     btnToggle.BackgroundColor3 = Color3.new(0.7,0,0)
     addLog("防踢已启动", Color3.new(0,1,0.4))
@@ -166,7 +187,7 @@ local function disableAK()
     pcall(function() if oldKick then lp.Kick = oldKick end end)
     if ancestryConn then ancestryConn:Disconnect() end
 
-    status.Text = "ANTIKICK: OFF | BLOCKED: " .. KickAttempts
+    status.Text = "ANTIKICK: OFF | BLOCKED: "..KickAttempts
     status.TextColor3 = Color3.new(1,0.2,0.2)
     btnToggle.BackgroundColor3 = Color3.new(0.2,0.3,0.4)
     addLog("防踢已关闭", Color3.new(1,0.2,0.2))
@@ -176,5 +197,5 @@ btnToggle.MouseButton1Click:Connect(function()
     if AntiKickActive then disableAK() else enableAK() end
 end)
 
-addLog("控制台已加载", Color3.new(0,1,1))
-addLog("每条新日志 = 新建一行", Color3.new(0,1,1))
+addLog("控制台加载完成", Color3.new(0,1,1))
+addLog("隐藏后点左下角 OPEN 打开", Color3.new(0,1,1))
