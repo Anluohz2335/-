@@ -1,0 +1,39 @@
+-- 纯静默防踢 | 无UI 低检测版
+local lp = game:GetService("Players").LocalPlayer
+local TeleportService = game:GetService("TeleportService")
+
+-- 防 Kick 核心
+local mt = getrawmetatable(game)
+local oldNamecall = mt.__namecall
+setreadonly(mt, false)
+
+mt.__namecall = newcclosure(function(self, ...)
+    local method = getnamecallmethod()
+    if method == "Kick" and self == lp then
+        return task.wait(9e9)
+    end
+    return oldNamecall(self, ...)
+end)
+
+setreadonly(mt, true)
+
+-- 角色被移除时重新加载
+lp.CharacterRemoving:Connect(function()
+    task.wait(0.5)
+    lp:LoadCharacter()
+end)
+
+-- 传送拦截防踢
+lp.OnTeleport:Connect(function(state)
+    if state == Enum.TeleportState.Started then
+        task.wait(0.5)
+        TeleportService:Teleport(game.PlaceId, lp)
+    end
+end)
+
+-- 执行完成提示（只弹一次）
+game.StarterGui:SetCore("SendNotification", {
+    Title = "Protected",
+    Text = "Anti-Kick loaded",
+    Duration = 3
+})
